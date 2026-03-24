@@ -29,6 +29,15 @@ export class VideoProcessor extends WorkerHost {
     }
 
     const { fileId, url, sessionId, reservedBytes } = job.data;
+    this.logger.log(
+      [
+        `jobId=${String(job.id)}`,
+        `sessionId=${sessionId}`,
+        `fileId=${fileId}`,
+        `event=processing_started`,
+      ].join(' '),
+    );
+
     const key = `videos/${fileId}.mp4`;
     const stream = this.ytDlpService.getDownloadStream(url);
 
@@ -40,9 +49,24 @@ export class VideoProcessor extends WorkerHost {
     try {
       await this.storageService.uploadStream(key, stream);
       await this.videoService.markReady(fileId, key, bytes);
+      this.logger.log(
+        [
+          `jobId=${String(job.id)}`,
+          `sessionId=${sessionId}`,
+          `fileId=${fileId}`,
+          `event=processing_completed`,
+          `bytes=${bytes}`,
+        ].join(' '),
+      );
     } catch (error) {
       this.logger.error(
-        `Job ${job.id} failed for file ${fileId}: ${String(error)}`,
+        [
+          `jobId=${String(job.id)}`,
+          `sessionId=${sessionId}`,
+          `fileId=${fileId}`,
+          `event=processing_failed`,
+          `error=${String(error)}`,
+        ].join(' '),
       );
       await this.videoService.markFailed(fileId, String(error));
       await this.videoService.releaseReservation(sessionId, reservedBytes);

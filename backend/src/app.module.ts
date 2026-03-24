@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AppConfigModule } from './config/app-config.module';
 import { envValidationSchema } from './config/env.validation';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { DatabaseModule } from './database.module';
 import { HealthModule } from './modules/health/health.module';
 import { QueueModule } from './modules/queue/queue.module';
@@ -31,6 +32,6 @@ import { VideoApiModule } from './modules/video/video-api.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(SessionMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware, SessionMiddleware).forRoutes('*');
   }
 }
