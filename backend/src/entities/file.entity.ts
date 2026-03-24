@@ -49,6 +49,7 @@ export class FileEntity {
   @JoinColumn({ name: 'sessionId' })
   session!: SessionEntity;
 
+  @Index('idx_files_created_at')
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
