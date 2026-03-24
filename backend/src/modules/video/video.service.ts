@@ -28,6 +28,8 @@ interface YtDlpMetadata {
   requested_downloads?: YtDlpRequestedDownload[];
 }
 
+const QUEUED_STATUS = 'queued' as FileStatus;
+
 @Injectable()
 export class VideoService {
   constructor(
@@ -91,7 +93,7 @@ export class VideoService {
         key: `pending/${randomUUID()}`,
         sourceUrl: url,
         size: String(estimatedSize),
-        status: FileStatus.QUEUED,
+        status: QUEUED_STATUS,
         sessionId,
       });
 
@@ -100,7 +102,7 @@ export class VideoService {
         fileId: saved.id,
         jobId: null,
         estimatedSize,
-        status: FileStatus.QUEUED,
+        status: QUEUED_STATUS,
       };
     }
 
@@ -225,13 +227,13 @@ export class VideoService {
       .getRawOne<{ total: string }>();
 
     const total = Number(raw?.total ?? 0);
-    await this.redisService.setNumber(STORAGE_USED_KEY, total);
+    await this.redisService.raw.set(STORAGE_USED_KEY, String(total));
     return total;
   }
 
   async promoteQueuedFiles(limit = 25): Promise<number> {
     const queuedFiles = await this.fileRepository.find({
-      where: { status: FileStatus.QUEUED },
+      where: { status: QUEUED_STATUS },
       order: { createdAt: 'ASC' },
       take: limit,
     });
@@ -273,7 +275,7 @@ export class VideoService {
         });
 
         const result = await this.fileRepository.update(
-          { id: file.id, status: FileStatus.QUEUED },
+          { id: file.id, status: QUEUED_STATUS },
           {
             status: FileStatus.PROCESSING,
             queueJobId: jobId,
