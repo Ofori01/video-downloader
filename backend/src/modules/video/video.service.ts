@@ -46,7 +46,7 @@ export class VideoService {
     sessionId: string,
   ): Promise<{
     fileId: string;
-    jobId: string;
+    jobId: string | null;
     estimatedSize: number;
     status: FileStatus;
   }> {
@@ -87,7 +87,21 @@ export class VideoService {
     }
 
     if (storageUsed + estimatedSize > this.config.maxStorageBytes) {
-      throw new ServiceUnavailableException('System storage limit reached');
+      const queued = this.fileRepository.create({
+        key: `pending/${randomUUID()}`,
+        sourceUrl: url,
+        size: String(estimatedSize),
+        status: FileStatus.QUEUED,
+        sessionId,
+      });
+
+      const saved = await this.fileRepository.save(queued);
+      return {
+        fileId: saved.id,
+        jobId: null,
+        estimatedSize,
+        status: FileStatus.QUEUED,
+      };
     }
 
     await Promise.all([
@@ -198,6 +212,88 @@ export class VideoService {
     await this.fileRepository.update(fileId, {
       status: FileStatus.DELETED,
     });
+  }
+
+  async reconcileStorageUsageFromDb(): Promise<number> {
+    const raw = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('COALESCE(SUM(CAST(file.size AS bigint)), 0)', 'total')
+      .where('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .andWhere('file.size IS NOT NULL')
+      .getRawOne<{ total: string }>();
+
+    const total = Number(raw?.total ?? 0);
+    await this.redisService.setNumber(STORAGE_USED_KEY, total);
+    return total;
+  }
+
+  async promoteQueuedFiles(limit = 25): Promise<number> {
+    const queuedFiles = await this.fileRepository.find({
+      where: { status: FileStatus.QUEUED },
+      order: { createdAt: 'ASC' },
+      take: limit,
+    });
+
+    let promoted = 0;
+
+    for (const file of queuedFiles) {
+      const estimatedSize = Number(file.size ?? 0);
+      if (!Number.isFinite(estimatedSize) || estimatedSize <= 0) {
+        await this.markFailed(file.id, 'Invalid queued file size');
+        continue;
+      }
+
+      const [sessionBytes, storageUsed] = await Promise.all([
+        this.sessionService.getSessionBytes(file.sessionId),
+        this.redisService.getNumber(STORAGE_USED_KEY),
+      ]);
+
+      if (sessionBytes + estimatedSize > this.config.sessionMaxBytes) {
+        await this.markFailed(file.id, 'Session storage quota exceeded');
+        continue;
+      }
+
+      if (storageUsed + estimatedSize > this.config.maxStorageBytes) {
+        break;
+      }
+
+      await Promise.all([
+        this.sessionService.reserveSessionBytes(file.sessionId, estimatedSize),
+        this.redisService.incrementBy(STORAGE_USED_KEY, estimatedSize),
+      ]);
+
+      try {
+        const jobId = await this.queueProducer.enqueueDownloadJob({
+          fileId: file.id,
+          url: file.sourceUrl,
+          sessionId: file.sessionId,
+          reservedBytes: estimatedSize,
+        });
+
+        const result = await this.fileRepository.update(
+          { id: file.id, status: FileStatus.QUEUED },
+          {
+            status: FileStatus.PROCESSING,
+            queueJobId: jobId,
+            errorReason: null,
+          },
+        );
+
+        if ((result.affected ?? 0) === 0) {
+          await this.releaseReservation(file.sessionId, estimatedSize);
+          continue;
+        }
+
+        promoted += 1;
+      } catch (error) {
+        await this.releaseReservation(file.sessionId, estimatedSize);
+        await this.markFailed(file.id, String(error));
+      }
+    }
+
+    return promoted;
   }
 
   private estimateSize(metadata: YtDlpMetadata): number {

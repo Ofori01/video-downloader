@@ -10,6 +10,7 @@ import {
 import { SessionEntity } from './session.entity';
 
 export enum FileStatus {
+  QUEUED = 'queued',
   PROCESSING = 'processing',
   READY = 'ready',
   FAILED = 'failed',

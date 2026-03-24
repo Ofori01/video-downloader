@@ -26,6 +26,10 @@ export class RedisService implements OnModuleDestroy {
     return this.client.incrby(key, by);
   }
 
+  async setNumber(key: string, value: number): Promise<void> {
+    await this.client.set(key, value);
+  }
+
   async decrementBy(key: string, by: number): Promise<number> {
     return this.client.decrby(key, by);
   }

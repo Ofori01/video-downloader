@@ -33,5 +33,8 @@ export class CleanupService {
         );
       }
     }
+
+    await this.videoService.reconcileStorageUsageFromDb();
+    await this.videoService.promoteQueuedFiles();
   }
 }
