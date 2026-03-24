@@ -15,8 +15,11 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return service status', () => {
+      const status = appController.getRootStatus();
+      expect(status.service).toBe('video-downloader-api');
+      expect(status.status).toBe('ok');
+      expect(typeof status.timestamp).toBe('string');
     });
   });
 });

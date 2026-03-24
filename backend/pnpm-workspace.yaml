@@ -1,0 +1,5 @@
+allowBuilds:
+  '@nestjs/core': true
+  msgpackr-extract: true
+  unrs-resolver: true
+  ytdlp-nodejs: true

@@ -1,16 +1,14 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppConfigModule } from './config/app-config.module';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database.module';
-import { HealthModule } from './modules/health/health.module';
+import { CleanupModule } from './modules/cleanup/cleanup.module';
 import { QueueModule } from './modules/queue/queue.module';
 import { SessionModule } from './modules/session/session.module';
-import { SessionMiddleware } from './modules/session/session.middleware';
 import { StorageModule } from './modules/storage/storage.module';
-import { VideoApiModule } from './modules/video/video-api.module';
+import { VideoWorkerModule } from './modules/video/video-worker.module';
 
 @Module({
   imports: [
@@ -18,19 +16,14 @@ import { VideoApiModule } from './modules/video/video-api.module';
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
+    ScheduleModule.forRoot(),
     AppConfigModule,
     DatabaseModule,
     QueueModule,
     SessionModule,
     StorageModule,
-    VideoApiModule,
-    HealthModule,
+    VideoWorkerModule,
+    CleanupModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(SessionMiddleware).forRoutes('*');
-  }
-}
+export class WorkerModule {}
