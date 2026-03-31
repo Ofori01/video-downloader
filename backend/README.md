@@ -2,6 +2,60 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
+## Video Downloader Backend (API + Worker)
+
+This backend uses one NestJS codebase with two runtime entrypoints:
+
+- API service: `node dist/main.js`
+- Worker service: `node dist/worker.js`
+
+### 1. Environment setup
+
+```bash
+cp .env.example .env
+```
+
+Fill all required values in `.env`.
+
+### 2. Install dependencies
+
+```bash
+pnpm install
+```
+
+### 3. Run in development
+
+```bash
+# API only
+pnpm run start:api:dev
+
+# Worker only (separate terminal)
+pnpm run start:worker:dev
+```
+
+### 4. Build and run in production mode
+
+```bash
+pnpm run build
+
+# API process
+pnpm run start:api:prod
+
+# Worker process
+pnpm run start:worker:prod
+```
+
+### 5. Render deployment commands
+
+- Web service start command: `node dist/main.js`
+- Worker service start command: `node dist/worker.js`
+
+### Notes
+
+- Session tracking is cookie-based and anonymous.
+- Download processing runs only in the worker via BullMQ.
+- Storage and quota limits are environment-driven.
+
 [circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
 [circleci-url]: https://circleci.com/gh/nestjs/nest
 

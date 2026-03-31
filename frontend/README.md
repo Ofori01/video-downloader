@@ -1,8 +1,14 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+This is a [Next.js](https://nextjs.org) project for the Video Downloader frontend.
 
 ## Getting Started
 
-First, run the development server:
+1. Copy environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+2. Run the development server:
 
 ```bash
 npm run dev
@@ -16,21 +22,42 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Frontend Data Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This frontend follows a standardized layered approach:
 
-## Learn More
+- Global types: `types/*`
+- API layer (HTTP only): `api/*`
+- Service layer (view/domain mapping): `services/*`
+- Query hooks: `hooks/*`
+- Global query provider: `app/providers.tsx`
 
-To learn more about Next.js, take a look at the following resources:
+### Request stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `axios` is used via a shared client in `api/http-client.ts`
+- `@tanstack/react-query` handles queries, mutations, cache, retries, and polling
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Error handling and retries
 
-## Deploy on Vercel
+- Errors are normalized in `api/error.ts`
+- Query retries are enabled only for retryable/network/server failures
+- Mutation retries are conservative (network-only, single retry) to reduce duplicate job creation risk
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Environment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `NEXT_PUBLIC_API_BASE_URL` controls backend API base URL for browser requests
+- Requests are made with credentials enabled for session cookie support
+
+## UI Foundation
+
+- Official `shadcn` setup is enabled (`components.json`)
+- Reusable design tokens and theme variables are defined in `app/globals.css`
+- Components consume global tokens for consistency across the project
+
+## Scripts
+
+```bash
+npm run dev
+npm run lint
+npm run build
+```

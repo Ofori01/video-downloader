@@ -1,0 +1,61 @@
+import type { NextFunction, Request, Response } from 'express';
+import { SessionMiddleware } from './session.middleware';
+
+describe('SessionMiddleware', () => {
+  const sessionService = {
+    touchSession: jest.fn(),
+  };
+
+  const config = {
+    sessionCookieName: 'sessionId',
+    sessionCookieSecure: false,
+    sessionCookieMaxAgeSeconds: 86400,
+  };
+
+  const createMiddleware = () =>
+    new SessionMiddleware(config as never, sessionService as never);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('creates and sets a session cookie when missing', async () => {
+    const middleware = createMiddleware();
+    const req = {
+      cookies: {},
+    } as unknown as Request;
+    const res = {
+      cookie: jest.fn(),
+    } as unknown as Response;
+    const next = jest.fn() as NextFunction;
+
+    await middleware.use(req, res, next);
+
+    expect(req.sessionContext?.id).toBeDefined();
+    expect(res.cookie).toHaveBeenCalledTimes(1);
+    expect(sessionService.touchSession).toHaveBeenCalledWith(
+      req.sessionContext?.id,
+    );
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('uses existing session cookie and does not set a new one', async () => {
+    const middleware = createMiddleware();
+    const req = {
+      cookies: { sessionId: 'existing-session' },
+    } as unknown as Request;
+    const res = {
+      cookie: jest.fn(),
+    } as unknown as Response;
+    const next = jest.fn() as NextFunction;
+
+    await middleware.use(req, res, next);
+
+    expect(req.sessionContext?.id).toBe('existing-session');
+    expect(res.cookie).not.toHaveBeenCalled();
+    expect(sessionService.touchSession).toHaveBeenCalledWith(
+      'existing-session',
+    );
+    expect(next).toHaveBeenCalled();
+  });
+});
