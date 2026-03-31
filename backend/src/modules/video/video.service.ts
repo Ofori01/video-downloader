@@ -46,6 +46,7 @@ export class VideoService {
   async submitDownload(
     url: string,
     sessionId: string,
+    profileId?: string,
   ): Promise<{
     fileId: string;
     jobId: string | null;
@@ -64,19 +65,45 @@ export class VideoService {
       throw new ForbiddenException('Session has exceeded job rate limit');
     }
 
-    const metadata = (await this.ytDlpService.getMetadata(
-      url,
-    )) as YtDlpMetadata;
-    const estimatedSize = this.estimateSize(metadata);
+    let estimatedSize: number;
 
-    if (estimatedSize <= 0) {
-      throw new BadRequestException(
-        'Unable to estimate file size for this source',
-      );
+    if (profileId) {
+      // Use actual filesize from the selected format
+      estimatedSize = await this.ytDlpService.getFormatSize(url, profileId);
+      if (estimatedSize <= 0) {
+        throw new BadRequestException(
+          'Unable to determine file size for selected format',
+        );
+      }
+    } else {
+      // Fallback: use best format
+      const metadata = (await this.ytDlpService.getMetadata(
+        url,
+      )) as YtDlpMetadata;
+      estimatedSize = this.estimateSize(metadata);
+
+      if (estimatedSize <= 0) {
+        // More detailed error for debugging
+        const hasFormats =
+          metadata &&
+          typeof metadata === 'object' &&
+          Array.isArray((metadata as any).formats);
+        throw new BadRequestException(
+          hasFormats
+            ? 'Unable to estimate file size - selected format has no size information'
+            : 'Unable to estimate file size for this source. Try using the profile selection first.',
+        );
+      }
     }
 
     if (estimatedSize > this.config.maxFileBytes) {
       throw new BadRequestException('Requested file exceeds max file size');
+    }
+
+    if (estimatedSize > this.config.sessionMaxBytes) {
+      throw new BadRequestException(
+        'Requested file exceeds per-session storage quota',
+      );
     }
 
     const [sessionBytes, storageUsed] = await Promise.all([
@@ -85,7 +112,15 @@ export class VideoService {
     ]);
 
     if (sessionBytes + estimatedSize > this.config.sessionMaxBytes) {
-      throw new ForbiddenException('Session storage quota exceeded');
+      const dbSessionBytes = await this.getSessionBytesFromDb(sessionId);
+
+      if (dbSessionBytes !== sessionBytes) {
+        await this.sessionService.setSessionBytes(sessionId, dbSessionBytes);
+      }
+
+      if (dbSessionBytes + estimatedSize > this.config.sessionMaxBytes) {
+        throw new ForbiddenException('Session storage quota exceeded');
+      }
     }
 
     if (storageUsed + estimatedSize > this.config.maxStorageBytes) {
@@ -126,6 +161,7 @@ export class VideoService {
         url,
         sessionId,
         reservedBytes: estimatedSize,
+        profileId,
       });
 
       saved.queueJobId = jobId;
@@ -168,9 +204,11 @@ export class VideoService {
     if (!file.downloadedAt) {
       const now = new Date();
       file.downloadedAt = now;
-      file.expiresAt = new Date(
-        now.getTime() + this.config.fileTtlSeconds * 1000,
-      );
+      if (!file.expiresAt) {
+        file.expiresAt = new Date(
+          now.getTime() + this.config.fileTtlSeconds * 1000,
+        );
+      }
       await this.fileRepository.save(file);
     }
 
@@ -179,12 +217,50 @@ export class VideoService {
   }
 
   async markReady(fileId: string, key: string, size: number): Promise<void> {
+    const now = new Date();
+    const expiresAt = new Date(
+      now.getTime() + this.config.fileTtlSeconds * 1000,
+    );
+
     await this.fileRepository.update(fileId, {
       key,
       size: String(size),
       status: FileStatus.READY,
+      expiresAt,
       errorReason: null,
     });
+  }
+
+  async reconcileReservationForCompletedFile(
+    sessionId: string,
+    reservedBytes: number,
+    actualBytes: number,
+  ): Promise<void> {
+    const reserved = Number.isFinite(reservedBytes)
+      ? Math.max(0, Math.trunc(reservedBytes))
+      : 0;
+    const actual = Number.isFinite(actualBytes)
+      ? Math.max(0, Math.trunc(actualBytes))
+      : 0;
+
+    if (reserved === actual) {
+      return;
+    }
+
+    if (reserved > actual) {
+      const releaseBytes = reserved - actual;
+      await Promise.all([
+        this.sessionService.releaseSessionBytes(sessionId, releaseBytes),
+        this.redisService.decrementBy(STORAGE_USED_KEY, releaseBytes),
+      ]);
+      return;
+    }
+
+    const additionalBytes = actual - reserved;
+    await Promise.all([
+      this.sessionService.reserveSessionBytes(sessionId, additionalBytes),
+      this.redisService.incrementBy(STORAGE_USED_KEY, additionalBytes),
+    ]);
   }
 
   async markFailed(fileId: string, reason: string): Promise<void> {
@@ -299,6 +375,7 @@ export class VideoService {
   }
 
   private estimateSize(metadata: YtDlpMetadata): number {
+    // Try root level locations first
     const raw =
       metadata?.filesize ??
       metadata?.filesize_approx ??
@@ -306,6 +383,51 @@ export class VideoService {
       metadata?.requested_downloads?.[0]?.filesize_approx;
 
     const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : 0;
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+
+    // Fallback: try to estimate from best format if available
+    // This handles cases like X.com where root-level filesize might not exist
+    if (metadata && typeof metadata === 'object') {
+      const metaObj = metadata as any;
+      const formats = Array.isArray(metaObj.formats) ? metaObj.formats : [];
+
+      if (formats.length > 0) {
+        // Try to find best format and estimate from it
+        const best =
+          formats.find((f: any) => f.format_id === metaObj.format_id) ||
+          formats[0];
+
+        if (best) {
+          // Use same logic as getActualFormatSize but inline to avoid dependency
+          if (best.filesize > 0) return best.filesize;
+          if (best.filesize_approx > 0) return best.filesize_approx;
+
+          // Estimate from bitrate if available
+          const bitrate = best.tbr || best.abr || best.vbr || 0;
+          const duration = best.duration || metaObj.duration || 0;
+          if (bitrate > 0 && duration > 0) {
+            return Math.round((bitrate * 1000 * duration) / 8);
+          }
+        }
+      }
+    }
+
+    return 0;
+  }
+
+  private async getSessionBytesFromDb(sessionId: string): Promise<number> {
+    const raw = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('COALESCE(SUM(CAST(file.size AS bigint)), 0)', 'total')
+      .where('file.sessionId = :sessionId', { sessionId })
+      .andWhere('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .andWhere('file.size IS NOT NULL')
+      .getRawOne<{ total: string }>();
+
+    return Number(raw?.total ?? 0);
   }
 }

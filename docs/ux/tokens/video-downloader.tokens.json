@@ -1,0 +1,172 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "name": "video-downloader-design-tokens",
+  "version": "1.0.0",
+  "meta": {
+    "theme": "Quiet Utility",
+    "grid": "12-column",
+    "spacing": "8px base",
+    "typographyLevels": 9
+  },
+  "color": {
+    "primary": {
+      "50": { "value": "#EEF6FF" },
+      "100": { "value": "#DAECFF" },
+      "200": { "value": "#B9DAFF" },
+      "300": { "value": "#8FC1FF" },
+      "400": { "value": "#62A4FF" },
+      "500": { "value": "#2F7BFF" },
+      "600": { "value": "#1F63E6" },
+      "700": { "value": "#1B4FB8" },
+      "800": { "value": "#1A438F" },
+      "900": { "value": "#193B73" }
+    },
+    "neutral": {
+      "0": { "value": "#FFFFFF" },
+      "25": { "value": "#FCFCFD" },
+      "50": { "value": "#F7F8FA" },
+      "100": { "value": "#ECEFF3" },
+      "200": { "value": "#DDE2EA" },
+      "300": { "value": "#C6CDD8" },
+      "400": { "value": "#98A2B3" },
+      "500": { "value": "#667085" },
+      "600": { "value": "#475467" },
+      "700": { "value": "#344054" },
+      "800": { "value": "#1D2939" },
+      "900": { "value": "#101828" },
+      "950": { "value": "#090D14" }
+    },
+    "semantic": {
+      "success": { "value": "#1F9D68" },
+      "warning": { "value": "#D08700" },
+      "error": { "value": "#D92D20" },
+      "info": { "value": "#1170E4" }
+    }
+  },
+  "surface": {
+    "light": {
+      "canvas": { "value": "{color.neutral.25.value}" },
+      "surface": { "value": "{color.neutral.0.value}" },
+      "subtle": { "value": "{color.neutral.50.value}" },
+      "textPrimary": { "value": "{color.neutral.900.value}" },
+      "textSecondary": { "value": "{color.neutral.600.value}" },
+      "textTertiary": { "value": "{color.neutral.500.value}" },
+      "border": { "value": "{color.neutral.200.value}" }
+    },
+    "dark": {
+      "canvas": { "value": "#090D14" },
+      "surface": { "value": "#101828" },
+      "subtle": { "value": "#1D2939" },
+      "textPrimary": { "value": "#F2F4F7" },
+      "textSecondary": { "value": "#CED4DC" },
+      "textTertiary": { "value": "#98A2B3" },
+      "border": { "value": "#344054" }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "sans": {
+        "value": "'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+      },
+      "mono": {
+        "value": "'SF Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+      }
+    },
+    "display": {
+      "fontSize": { "value": "clamp(2.25rem, 1.8rem + 1.4vw, 3rem)" },
+      "lineHeight": { "value": "1.1" },
+      "fontWeight": { "value": "700" }
+    },
+    "h1": {
+      "fontSize": { "value": "clamp(1.875rem, 1.55rem + 0.9vw, 2.5rem)" },
+      "lineHeight": { "value": "1.15" },
+      "fontWeight": { "value": "650" }
+    },
+    "h2": {
+      "fontSize": { "value": "clamp(1.5rem, 1.32rem + 0.6vw, 2rem)" },
+      "lineHeight": { "value": "1.2" },
+      "fontWeight": { "value": "650" }
+    },
+    "h3": {
+      "fontSize": { "value": "clamp(1.25rem, 1.16rem + 0.35vw, 1.5rem)" },
+      "lineHeight": { "value": "1.25" },
+      "fontWeight": { "value": "600" }
+    },
+    "title": {
+      "fontSize": { "value": "clamp(1.125rem, 1.08rem + 0.2vw, 1.25rem)" },
+      "lineHeight": { "value": "1.3" },
+      "fontWeight": { "value": "600" }
+    },
+    "body": {
+      "fontSize": { "value": "clamp(1rem, 0.97rem + 0.12vw, 1.0625rem)" },
+      "lineHeight": { "value": "1.6" },
+      "fontWeight": { "value": "400" }
+    },
+    "bodySm": {
+      "fontSize": { "value": "clamp(0.9375rem, 0.9rem + 0.1vw, 1rem)" },
+      "lineHeight": { "value": "1.55" },
+      "fontWeight": { "value": "400" }
+    },
+    "label": {
+      "fontSize": { "value": "clamp(0.875rem, 0.84rem + 0.1vw, 0.9375rem)" },
+      "lineHeight": { "value": "1.4" },
+      "fontWeight": { "value": "500" }
+    },
+    "caption": {
+      "fontSize": { "value": "clamp(0.75rem, 0.72rem + 0.08vw, 0.8125rem)" },
+      "lineHeight": { "value": "1.35" },
+      "fontWeight": { "value": "500" }
+    }
+  },
+  "spacing": {
+    "0": { "value": "0px" },
+    "1": { "value": "4px" },
+    "2": { "value": "8px" },
+    "3": { "value": "12px" },
+    "4": { "value": "16px" },
+    "6": { "value": "24px" },
+    "8": { "value": "32px" },
+    "10": { "value": "40px" },
+    "12": { "value": "48px" },
+    "14": { "value": "56px" },
+    "16": { "value": "64px" },
+    "20": { "value": "80px" },
+    "24": { "value": "96px" }
+  },
+  "radius": {
+    "sm": { "value": "8px" },
+    "md": { "value": "12px" },
+    "lg": { "value": "16px" },
+    "xl": { "value": "20px" },
+    "pill": { "value": "9999px" }
+  },
+  "shadow": {
+    "sm": { "value": "0 1px 2px rgba(16, 24, 40, 0.06)" },
+    "md": { "value": "0 6px 16px rgba(16, 24, 40, 0.08)" },
+    "lg": { "value": "0 12px 28px rgba(16, 24, 40, 0.12)" }
+  },
+  "motion": {
+    "duration": {
+      "fast": { "value": "120ms" },
+      "base": { "value": "200ms" },
+      "slow": { "value": "320ms" }
+    },
+    "easing": {
+      "standard": { "value": "cubic-bezier(0.2, 0, 0, 1)" },
+      "emphasized": { "value": "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+    }
+  },
+  "layout": {
+    "grid": {
+      "columns": { "value": 12 },
+      "gutterDesktop": { "value": "24px" },
+      "gutterTablet": { "value": "16px" },
+      "gutterMobile": { "value": "16px" }
+    },
+    "breakpoint": {
+      "mobile": { "value": "0px" },
+      "tablet": { "value": "768px" },
+      "desktop": { "value": "1280px" }
+    }
+  }
+}

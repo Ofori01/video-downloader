@@ -8,6 +8,7 @@ import { RedisService } from './redis.service';
 
 @Module({
   imports: [
+    AppConfigModule,
     BullModule.forRootAsync({
       imports: [AppConfigModule],
       inject: [AppConfigService],

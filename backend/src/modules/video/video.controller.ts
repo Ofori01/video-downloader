@@ -7,16 +7,22 @@ import {
   Post,
   Req,
   Res,
+  Query,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CreateVideoJobDto } from './dto/create-video-job.dto';
+import { AvailableProfileDto } from './dto/available-profiles.dto';
 import { VideoService } from './video.service';
+import { YtDlpService } from './ytdlp.service';
 
 @Controller()
 export class VideoController {
-  constructor(private readonly videoService: VideoService) {}
+  constructor(
+    private readonly videoService: VideoService,
+    private readonly ytDlpService: YtDlpService,
+  ) {}
 
   @Post('video/jobs')
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
@@ -26,7 +32,17 @@ export class VideoController {
       throw new InternalServerErrorException('Session context missing');
     }
 
-    return this.videoService.submitDownload(body.url, sessionId);
+    return this.videoService.submitDownload(body.url, sessionId, body.profileId);
+  }
+
+  @Get('video/profiles')
+  async getProfiles(@Query('url') url?: string): Promise<AvailableProfileDto[]> {
+    if (!url) {
+      return [];
+    }
+
+    const profiles = await this.ytDlpService.getAvailableProfiles(url);
+    return profiles;
   }
 
   @Get('video/files/:id')

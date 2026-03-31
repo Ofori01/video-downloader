@@ -61,6 +61,13 @@ export class SessionService {
     );
   }
 
+  async setSessionBytes(sessionId: string, bytes: number): Promise<void> {
+    await this.redisService.setNumber(
+      `session:${sessionId}:bytes_used`,
+      Math.max(0, Math.trunc(bytes)),
+    );
+  }
+
   async incrementSessionDownloads(sessionId: string): Promise<number> {
     return this.redisService.incrementBy(`session:${sessionId}:downloads`, 1);
   }

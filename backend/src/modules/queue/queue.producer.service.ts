@@ -14,10 +14,10 @@ export class QueueProducerService {
 
   async enqueueDownloadJob(data: DownloadVideoJobData): Promise<string> {
     const job = await this.queue.add(DOWNLOAD_JOB_NAME, data, {
-      attempts: 3,
+      attempts: 2,
       backoff: {
         type: 'exponential',
-        delay: 3_000,
+        delay: 1_500,
       },
       removeOnComplete: 200,
       removeOnFail: 500,

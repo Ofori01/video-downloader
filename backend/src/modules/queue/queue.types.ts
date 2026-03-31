@@ -3,4 +3,5 @@ export interface DownloadVideoJobData {
   url: string;
   sessionId: string;
   reservedBytes: number;
+  profileId?: string;
 }

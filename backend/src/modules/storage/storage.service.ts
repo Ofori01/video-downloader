@@ -1,10 +1,11 @@
+import { Upload } from '@aws-sdk/lib-storage';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Injectable } from '@nestjs/common';
 import type { Readable } from 'node:stream';
@@ -23,6 +24,10 @@ export class StorageService {
         accessKeyId: this.config.r2AccessKeyId,
         secretAccessKey: this.config.r2SecretAccessKey,
       },
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 15_000,
+        requestTimeout: 300_000, // 5 minutes
+      }),
     });
   }
 
@@ -52,11 +57,13 @@ export class StorageService {
   }
 
   async getSignedDownloadUrl(key: string): Promise<string> {
+    const filename = key.split('/').pop() || 'download.mp4';
     return getSignedUrl(
       this.s3Client,
       new GetObjectCommand({
         Bucket: this.config.r2Bucket,
         Key: key,
+        ResponseContentDisposition: `attachment; filename="${filename}"`,
       }),
       {
         expiresIn: this.config.signedUrlTtlSeconds,

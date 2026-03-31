@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppConfigModule } from '../../config/app-config.module';
 import { FileEntity } from '../../entities/file.entity';
 import { QueueModule } from '../queue/queue.module';
 import { SessionModule } from '../session/session.module';
@@ -12,6 +13,7 @@ import { YtDlpService } from './ytdlp.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([FileEntity]),
+    AppConfigModule,
     QueueModule,
     SessionModule,
     StorageModule,
