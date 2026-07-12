@@ -16,6 +16,12 @@ pnpm install
 
 Fill all required values in `.env`. Leave `YTDLP_BINARY_PATH` and `FFMPEG_BINARY_PATH` empty to use binaries from `PATH`.
 
+`FRONTEND_ORIGIN` controls browser CORS access. Use a comma-separated list when running the frontend on more than one local origin, for example:
+
+```bash
+FRONTEND_ORIGIN=http://localhost:3001,http://localhost:3100
+```
+
 ## Development Runtimes
 
 Run the API and worker in separate terminals:

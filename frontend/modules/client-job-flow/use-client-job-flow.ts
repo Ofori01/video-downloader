@@ -76,7 +76,7 @@ function useJobSubmissionMutation() {
         ["video-file", data.fileId],
         toOptimisticVideoFile(data, variables),
       );
-      notify.success("Download job submitted.");
+      notify.success("Download started.");
     },
     onError: (error: unknown) => {
       const normalized = normalizeError(error);

@@ -89,11 +89,11 @@ function parseResolution(resolution: string | undefined): number {
 
 function formatEta(file: VideoFile): string {
   if (file.status === "queued") {
-    return "waiting for worker capacity";
+    return "Waiting to start";
   }
 
   if (file.status === "processing") {
-    return "processing in progress";
+    return "Preparing your file";
   }
 
   if (file.status === "ready" && file.expiresAt) {
@@ -107,10 +107,14 @@ function formatEta(file: VideoFile): string {
   }
 
   if (file.status === "failed") {
-    return "processing failed";
+    return "Could not finish";
   }
 
-  return "status updated";
+  if (file.status === "deleted") {
+    return "No longer available";
+  }
+
+  return "Updated";
 }
 
 function toTitle(sourceUrl: string): string {

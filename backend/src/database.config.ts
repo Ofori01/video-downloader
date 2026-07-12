@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import * as dotenv from 'dotenv';
+import { join } from 'path';
 import { FileEntity } from './entities/file.entity';
 import { SessionEntity } from './entities/session.entity';
 
@@ -10,7 +11,7 @@ export const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   entities: [FileEntity, SessionEntity],
-  migrations: ['src/migrations/*.ts'],
+  migrations: [join(__dirname, 'migrations/*{.ts,.js}')],
   migrationsRun: false,
   logging: process.env.NODE_ENV === 'development',
   synchronize: false,

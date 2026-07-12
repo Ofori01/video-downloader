@@ -1,11 +1,34 @@
 import * as Joi from 'joi';
 
+function validateFrontendOrigin(
+  value: string,
+  helpers: Joi.CustomHelpers,
+): string | Joi.ErrorReport {
+  const origins = value.split(',').map((origin) => origin.trim());
+  const uriSchema = Joi.string().uri({ scheme: ['http', 'https'] });
+
+  if (origins.length === 0 || origins.some((origin) => origin.length === 0)) {
+    return helpers.error('any.invalid');
+  }
+
+  for (const origin of origins) {
+    const { error } = uriSchema.validate(origin);
+    if (error) {
+      return helpers.error('string.uri');
+    }
+  }
+
+  return value;
+}
+
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),
   PORT: Joi.number().integer().min(1).max(65535).default(3000),
-  FRONTEND_ORIGIN: Joi.string().uri().required(),
+  FRONTEND_ORIGIN: Joi.string()
+    .custom(validateFrontendOrigin, 'frontend origin validation')
+    .required(),
 
   DATABASE_URL: Joi.string().uri().required(),
   REDIS_URL: Joi.string().uri().required(),

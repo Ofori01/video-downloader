@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
+import { AppConfigService } from './config/app-config.service';
+import { createCorsOptions } from './config/cors-options';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,13 +19,8 @@ async function bootstrap() {
   );
   app.useGlobalInterceptors(new RequestLoggingInterceptor());
 
-  const origin = process.env.FRONTEND_ORIGIN;
-  if (origin) {
-    app.enableCors({
-      origin,
-      credentials: true,
-    });
-  }
+  const config = app.get(AppConfigService);
+  app.enableCors(createCorsOptions(config.frontendOrigin));
 
   await app.listen(process.env.PORT ?? 3000);
 }
