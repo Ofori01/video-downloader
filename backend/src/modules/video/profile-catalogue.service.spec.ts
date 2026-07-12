@@ -83,21 +83,92 @@ describe('ProfileCatalogueService', () => {
       expect.objectContaining({
         id: 'best',
         label: '1080p · H.264 · AAC · MP4',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
         resolution: '1080p',
+        hasAudio: true,
+        hasVideo: true,
         isAudioOnly: false,
       }),
       expect.objectContaining({
         id: '720-av',
         label: '720p with audio',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
         resolution: '720p',
+        hasAudio: true,
+        hasVideo: true,
         isAudioOnly: false,
       }),
       expect.objectContaining({
         id: 'audio',
         label: 'Audio only (m4a)',
+        ext: 'm4a',
+        contentType: 'audio/mp4',
+        mediaKind: 'audio',
+        hasAudio: true,
+        hasVideo: false,
         isAudioOnly: true,
       }),
     ]);
+    expect(profiles).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '720-v',
+        }),
+      ]),
+    );
+  });
+
+  it('resolves a selected profile from the generated catalogue', async () => {
+    const service = createService();
+    metadataClient.getMetadata.mockResolvedValue({
+      requestedDownloads: [],
+      formats: [
+        {
+          formatId: 'audio',
+          ext: 'm4a',
+          vcodec: 'none',
+          acodec: 'aac',
+          filesize: 1234,
+        },
+      ],
+    });
+
+    await expect(
+      service.getProfile('https://example.com/video', 'audio'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'audio',
+        format: 'audio',
+        ext: 'm4a',
+        contentType: 'audio/mp4',
+        mediaKind: 'audio',
+      }),
+    );
+  });
+
+  it('does not resolve video-only formats as selectable profiles', async () => {
+    const service = createService();
+    metadataClient.getMetadata.mockResolvedValue({
+      requestedDownloads: [],
+      formats: [
+        {
+          formatId: 'video-only',
+          ext: 'mp4',
+          height: 720,
+          vcodec: 'h264',
+          acodec: 'none',
+          filesize: 1234,
+        },
+      ],
+    });
+
+    await expect(
+      service.getProfile('https://example.com/video', 'video-only'),
+    ).resolves.toBeNull();
   });
 
   it('returns selected format size from metadata', async () => {

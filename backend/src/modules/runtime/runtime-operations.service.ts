@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { QueueDiagnosticsService } from '../queue/queue-diagnostics.service';
 import { RedisService } from '../queue/redis.service';
-import { RuntimeBinaryReadinessService } from './runtime-binary-readiness.service';
 import { RuntimeCheck, RuntimeHealthStatus } from './runtime.types';
 
 @Injectable()
@@ -11,16 +10,14 @@ export class RuntimeOperationsService {
     private readonly dataSource: DataSource,
     private readonly redisService: RedisService,
     private readonly queueDiagnostics: QueueDiagnosticsService,
-    private readonly binaryReadiness: RuntimeBinaryReadinessService,
   ) {}
 
   async getApiRuntimeStatus(): Promise<RuntimeHealthStatus> {
-    const [postgres, redis, queue, worker, binaries] = await Promise.all([
+    const [postgres, redis, queue, worker] = await Promise.all([
       this.checkPostgres(),
       this.checkRedis(),
       this.checkQueue(),
       this.checkWorker(),
-      this.binaryReadiness.checkRequiredBinaries(),
     ]);
 
     const checks = {
@@ -28,8 +25,6 @@ export class RuntimeOperationsService {
       redis,
       queue,
       worker,
-      ytDlp: binaries.ytDlp,
-      ffmpeg: binaries.ffmpeg,
     };
 
     return {

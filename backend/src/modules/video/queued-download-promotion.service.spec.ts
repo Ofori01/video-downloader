@@ -44,6 +44,9 @@ describe('QueuedDownloadPromotionService', () => {
         size: '1000',
         sessionId: 'session-1',
         profileId: '18',
+        mediaKind: 'audio',
+        outputExtension: 'm4a',
+        contentType: 'audio/mp4',
       },
     ]);
 
@@ -58,6 +61,11 @@ describe('QueuedDownloadPromotionService', () => {
       sessionId: 'session-1',
       reservedBytes: 1000,
       profileId: '18',
+      output: {
+        mediaKind: 'audio',
+        extension: 'm4a',
+        contentType: 'audio/mp4',
+      },
     });
     expect(fileStore.attachQueueJob).toHaveBeenCalledWith(
       'file-queued-1',

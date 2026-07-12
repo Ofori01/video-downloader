@@ -1,4 +1,3 @@
-import { RuntimeBinaryReadinessService } from './runtime-binary-readiness.service';
 import { RuntimeOperationsService } from './runtime-operations.service';
 
 describe('RuntimeOperationsService', () => {
@@ -14,16 +13,12 @@ describe('RuntimeOperationsService', () => {
     getQueueMetrics: jest.fn(),
     getWorkerCount: jest.fn(),
   };
-  const binaryReadiness = {
-    checkRequiredBinaries: jest.fn(),
-  };
 
   const createService = () =>
     new RuntimeOperationsService(
       dataSource as never,
       redisService as never,
       queueDiagnostics as never,
-      binaryReadiness as unknown as RuntimeBinaryReadinessService,
     );
 
   beforeEach(() => {
@@ -36,13 +31,9 @@ describe('RuntimeOperationsService', () => {
       failed: 3,
     });
     queueDiagnostics.getWorkerCount.mockResolvedValue(1);
-    binaryReadiness.checkRequiredBinaries.mockResolvedValue({
-      ytDlp: { status: 'up', details: '2026.01.01' },
-      ffmpeg: { status: 'up', details: 'ffmpeg version 7.0' },
-    });
   });
 
-  it('reports ok when dependencies, worker, and media binaries are ready', async () => {
+  it('reports ok when dependencies and a worker are ready', async () => {
     const status = await createService().getApiRuntimeStatus();
 
     expect(status.status).toBe('ok');
@@ -69,18 +60,10 @@ describe('RuntimeOperationsService', () => {
     });
   });
 
-  it('degrades when a required media binary is unavailable', async () => {
-    binaryReadiness.checkRequiredBinaries.mockResolvedValue({
-      ytDlp: { status: 'down', details: 'yt-dlp unavailable' },
-      ffmpeg: { status: 'up' },
-    });
-
+  it('does not expose API-local media binary checks', async () => {
     const status = await createService().getApiRuntimeStatus();
 
-    expect(status.status).toBe('degraded');
-    expect(status.checks.ytDlp).toEqual({
-      status: 'down',
-      details: 'yt-dlp unavailable',
-    });
+    expect(status.checks).not.toHaveProperty('ytDlp');
+    expect(status.checks).not.toHaveProperty('ffmpeg');
   });
 });

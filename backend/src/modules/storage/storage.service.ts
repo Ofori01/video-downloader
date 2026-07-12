@@ -31,32 +31,43 @@ export class StorageService {
     });
   }
 
-  async uploadStream(key: string, body: NodeJS.ReadableStream): Promise<void> {
+  async uploadStream(
+    key: string,
+    body: NodeJS.ReadableStream,
+    contentType: string,
+  ): Promise<void> {
     const upload = new Upload({
       client: this.s3Client,
       params: {
         Bucket: this.config.r2Bucket,
         Key: key,
         Body: body as Readable,
-        ContentType: 'video/mp4',
+        ContentType: contentType,
       },
     });
 
     await upload.done();
   }
 
-  async uploadBuffer(key: string, body: Buffer): Promise<void> {
+  async uploadBuffer(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void> {
     await this.s3Client.send(
       new PutObjectCommand({
         Bucket: this.config.r2Bucket,
         Key: key,
         Body: body,
-        ContentType: 'video/mp4',
+        ContentType: contentType,
       }),
     );
   }
 
-  async getSignedDownloadUrl(key: string): Promise<string> {
+  async getSignedDownloadUrl(
+    key: string,
+    contentType?: string | null,
+  ): Promise<string> {
     const filename = key.split('/').pop() || 'download.mp4';
     return getSignedUrl(
       this.s3Client,
@@ -64,6 +75,7 @@ export class StorageService {
         Bucket: this.config.r2Bucket,
         Key: key,
         ResponseContentDisposition: `attachment; filename="${filename}"`,
+        ResponseContentType: contentType ?? undefined,
       }),
       {
         expiresIn: this.config.signedUrlTtlSeconds,

@@ -5,6 +5,12 @@ export class AvailableProfileDto {
 
   format!: string;
 
+  ext!: string;
+
+  contentType!: string;
+
+  mediaKind!: 'audio' | 'video';
+
   resolution?: string;
 
   codec?: string;
@@ -12,6 +18,10 @@ export class AvailableProfileDto {
   audioCodec?: string;
 
   estimatedSize?: number;
+
+  hasAudio!: boolean;
+
+  hasVideo!: boolean;
 
   isAudioOnly!: boolean;
 }

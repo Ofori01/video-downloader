@@ -14,6 +14,7 @@ import { DownloadReservationService } from './download-reservation.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
 import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
 import { VideoProcessor } from './video.processor';
+import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
 import { YtDlpStreamClient } from './ytdlp-stream-client.service';
 import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
 
@@ -35,6 +36,7 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     DownloadWorkerLifecycleService,
     QueuedDownloadPromotionService,
     VideoProcessor,
+    YtDlpMetadataClient,
     YtDlpStreamClient,
     YtDlpStreamCommandBuilder,
   ],

@@ -47,6 +47,15 @@ export class FileEntity {
   @Column({ type: 'varchar', length: 128, nullable: true })
   profileId!: string | null;
 
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  mediaKind!: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  outputExtension!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  contentType!: string | null;
+
   @ManyToOne(() => SessionEntity, (session) => session.files, {
     onDelete: 'RESTRICT',
   })

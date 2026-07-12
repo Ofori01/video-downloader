@@ -3,7 +3,7 @@
 This backend uses one NestJS codebase with two production runtimes:
 
 - API runtime: accepts HTTP requests, manages anonymous sessions, performs profile discovery and admission checks, enqueues BullMQ jobs, serves file status, and redirects ready downloads.
-- Worker runtime: consumes BullMQ jobs, runs `yt-dlp`/`ffmpeg`, streams downloads to R2, updates file lifecycle state, reconciles reservations, promotes queued downloads, and runs cleanup.
+- Worker runtime: consumes BullMQ jobs, runs `yt-dlp` direct-format downloads, streams downloads to R2, updates file lifecycle state, reconciles reservations, promotes queued downloads, and runs cleanup.
 
 ADR-0001 makes the backend the owner of video job intake, worker processing, storage, cleanup, sessions, quotas, migrations, and operational health.
 
@@ -14,7 +14,7 @@ cp .env.example .env
 pnpm install
 ```
 
-Fill all required values in `.env`. Leave `YTDLP_BINARY_PATH` and `FFMPEG_BINARY_PATH` empty to use binaries from `PATH`.
+Fill all required values in `.env`. Leave `YTDLP_BINARY_PATH` empty to use the `yt-dlp` binary from `PATH`. `FFMPEG_BINARY_PATH` is optional and reserved for future merged/conversion profiles.
 
 `FRONTEND_ORIGIN` controls browser CORS access. Use a comma-separated list when running the frontend on more than one local origin, for example:
 
@@ -59,23 +59,26 @@ It reports separate checks for:
 - `redis`: Redis connectivity
 - `queue`: BullMQ queue reachability and queue counts
 - `worker`: connected BullMQ worker count
-- `ytDlp`: `yt-dlp` executable readiness
-- `ffmpeg`: `ffmpeg` executable readiness
 
 Queue reachability does not mean the worker is running. The health status is `degraded` when the queue is reachable but no worker is connected, because submitted downloads would not complete.
 
 ## Binary Readiness
 
-The Docker image installs `ffmpeg` and `yt-dlp`, then verifies both during build:
+The worker Docker image installs `yt-dlp`, then verifies it during the `worker-runtime` image build:
 
 ```bash
 pnpm run runtime:check:binaries
 ```
 
+The API image does not install the system media toolchain. API health reports orchestration readiness and worker connectivity; media binary readiness belongs to the worker image.
+
+Production downloads use direct `yt-dlp` formats. The profile catalogue exposes video formats that already contain audio, plus audio-only formats. It does not expose video-only formats until merged output support is added.
+
 For custom binary locations, set:
 
 ```bash
 YTDLP_BINARY_PATH=/absolute/path/to/yt-dlp
+# Optional: only needed for future merged/conversion profile experiments.
 FFMPEG_BINARY_PATH=/absolute/path/to/ffmpeg
 ```
 

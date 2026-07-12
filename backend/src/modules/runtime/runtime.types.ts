@@ -13,12 +13,10 @@ export interface RuntimeHealthStatus {
     redis: RuntimeCheck;
     queue: RuntimeCheck;
     worker: RuntimeCheck;
-    ytDlp: RuntimeCheck;
-    ffmpeg: RuntimeCheck;
   };
 }
 
 export interface BinaryReadinessResult {
   ytDlp: RuntimeCheck;
-  ffmpeg: RuntimeCheck;
+  ffmpeg?: RuntimeCheck;
 }

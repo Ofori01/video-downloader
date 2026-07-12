@@ -19,6 +19,7 @@ import { ProfileCatalogueService } from './profile-catalogue.service';
 import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
 import { VideoController } from './video.controller';
 import { VideoProcessor } from './video.processor';
+import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
 import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
 import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
 import { YtDlpStreamClient } from './ytdlp-stream-client.service';
@@ -49,6 +50,10 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     VideoProcessor,
     YtDlpFormatSizeService,
     YtDlpMetadataClient,
+    {
+      provide: VIDEO_METADATA_CLIENT,
+      useExisting: YtDlpMetadataClient,
+    },
     YtDlpStreamClient,
     YtDlpStreamCommandBuilder,
   ],

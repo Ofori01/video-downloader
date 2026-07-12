@@ -1,3 +1,5 @@
+import type { DownloadMediaKind } from './download-output';
+
 export type YtDlpStreamProfile = 'default' | 'fallback' | 'custom';
 
 export interface YtDlpStreamDiagnostics {
@@ -11,10 +13,15 @@ export interface AvailableProfile {
   id: string;
   label: string;
   format: string;
+  ext: string;
+  contentType: string;
+  mediaKind: DownloadMediaKind;
   resolution?: string;
   codec?: string;
   audioCodec?: string;
   estimatedSize?: number;
+  hasAudio: boolean;
+  hasVideo: boolean;
   isAudioOnly: boolean;
 }
 

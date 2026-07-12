@@ -39,6 +39,9 @@ export function toOptimisticVideoFile(
     status: data.status,
     sessionId: "current-session",
     profileId: variables.profileId ?? null,
+    mediaKind: null,
+    outputExtension: null,
+    contentType: null,
     createdAt: new Date().toISOString(),
     downloadedAt: null,
     expiresAt: null,
@@ -62,12 +65,12 @@ export function sortProfilesForSelection(
   profiles: AvailableProfile[],
 ): AvailableProfile[] {
   const merged = profiles.filter(
-    (profile) => !profile.isAudioOnly && profile.audioCodec !== undefined,
+    (profile) => profile.mediaKind === "video" && profile.hasAudio,
   );
   const videoOnly = profiles.filter(
-    (profile) => !profile.isAudioOnly && profile.audioCodec === undefined,
+    (profile) => profile.mediaKind === "video" && !profile.hasAudio,
   );
-  const audioOnly = profiles.filter((profile) => profile.isAudioOnly);
+  const audioOnly = profiles.filter((profile) => profile.mediaKind === "audio");
 
   return [
     ...merged.sort(compareProfileResolutionDescending),

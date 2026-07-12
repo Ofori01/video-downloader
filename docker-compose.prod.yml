@@ -30,7 +30,8 @@ services:
   backend-api:
     build:
       context: ./backend
-    image: video-downloader-backend:local
+      target: api-runtime
+    image: video-downloader-backend-api:local
     restart: unless-stopped
     command: ["pnpm", "run", "runtime:api"]
     env_file:
@@ -40,24 +41,35 @@ services:
     depends_on:
       - redis
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:$${PORT:-3000}/system/health >/dev/null || exit 1"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/system/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1));",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
   backend-worker:
-    image: video-downloader-backend:local
+    build:
+      context: ./backend
+      target: worker-runtime
+    image: video-downloader-backend-worker:local
     restart: unless-stopped
     command: ["pnpm", "run", "runtime:worker"]
     env_file:
       - ${APP_ENV_FILE:-.env.production}
+    environment:
+      YTDLP_BINARY_PATH: /usr/local/bin/yt-dlp
     depends_on:
       - redis
       - backend-api
 
   backend-migrate:
-    image: video-downloader-backend:local
+    image: video-downloader-backend-api:local
     profiles:
       - migrate
     command: ["pnpm", "run", "runtime:migrate"]

@@ -115,12 +115,18 @@ export function FormatOptions({
 
 function formatProfileMeta(profile: AvailableProfile): string {
   const size = formatBytes(profile.estimatedSize);
+  const extension = profile.ext.toUpperCase();
   if (profile.isAudioOnly) {
-    return size ? `Audio · ${size}` : "Audio";
+    return compactParts(["Audio", extension, size]).join(" · ");
   }
 
   const resolution = profile.resolution ? `${profile.resolution}` : "Video";
-  return size ? `${resolution} · ${size}` : resolution;
+  const audioState = profile.hasAudio ? null : "Video only";
+  return compactParts([resolution, audioState, extension, size]).join(" · ");
+}
+
+function compactParts(parts: Array<string | null | undefined>): string[] {
+  return parts.filter((part): part is string => Boolean(part));
 }
 
 function formatBytes(bytes: number | undefined): string | null {

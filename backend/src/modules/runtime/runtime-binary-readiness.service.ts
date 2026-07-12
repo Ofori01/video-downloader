@@ -18,18 +18,21 @@ export class RuntimeBinaryReadinessService {
   constructor(private readonly config: AppConfigService) {}
 
   async checkRequiredBinaries(): Promise<BinaryReadinessResult> {
-    const [ytDlp, ffmpeg] = await Promise.all([
-      this.checkBinary({
-        name: 'yt-dlp',
-        executable: this.config.ytDlpBinaryPath ?? 'yt-dlp',
-        args: ['--version'],
-      }),
-      this.checkBinary({
-        name: 'ffmpeg',
-        executable: this.config.ffmpegBinaryPath ?? 'ffmpeg',
-        args: ['-version'],
-      }),
-    ]);
+    const ytDlp = await this.checkBinary({
+      name: 'yt-dlp',
+      executable: this.config.ytDlpBinaryPath ?? 'yt-dlp',
+      args: ['--version'],
+    });
+
+    if (!this.config.ffmpegBinaryPath) {
+      return { ytDlp };
+    }
+
+    const ffmpeg = await this.checkBinary({
+      name: 'ffmpeg',
+      executable: this.config.ffmpegBinaryPath,
+      args: ['-version'],
+    });
 
     return { ytDlp, ffmpeg };
   }

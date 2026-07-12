@@ -49,6 +49,6 @@ export class DownloadFileAccessService {
     }
 
     await this.sessionService.incrementSessionDownloads(sessionId);
-    return this.storageService.getSignedDownloadUrl(file.key);
+    return this.storageService.getSignedDownloadUrl(file.key, file.contentType);
   }
 }

@@ -11,9 +11,10 @@ import { DownloadIntakeService } from './download-intake.service';
 import { DownloadReservationService } from './download-reservation.service';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
 import { ProfileCatalogueService } from './profile-catalogue.service';
+import { QueuedMetadataClient } from './queued-metadata-client.service';
 import { VideoController } from './video.controller';
+import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
 import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
-import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
 
 @Module({
   imports: [
@@ -31,8 +32,12 @@ import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
     DownloadReservationService,
     DownloadSizeEstimator,
     ProfileCatalogueService,
+    QueuedMetadataClient,
     YtDlpFormatSizeService,
-    YtDlpMetadataClient,
+    {
+      provide: VIDEO_METADATA_CLIENT,
+      useExisting: QueuedMetadataClient,
+    },
   ],
 })
 export class VideoApiModule {}

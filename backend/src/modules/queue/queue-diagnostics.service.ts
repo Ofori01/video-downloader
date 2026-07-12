@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { VIDEO_QUEUE_NAME } from './queue-name';
-import { DownloadVideoJobData } from './queue.types';
+import { VideoQueueJobData } from './queue.types';
 
 export interface QueueRuntimeMetrics {
   waiting: number;
@@ -14,7 +14,7 @@ export interface QueueRuntimeMetrics {
 export class QueueDiagnosticsService {
   constructor(
     @InjectQueue(VIDEO_QUEUE_NAME)
-    private readonly queue: Queue<DownloadVideoJobData>,
+    private readonly queue: Queue<VideoQueueJobData>,
   ) {}
 
   async getQueueMetrics(): Promise<QueueRuntimeMetrics> {

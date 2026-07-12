@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { inferDownloadOutput } from './download-output';
+import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
+import type { VideoMetadataClient } from './video-metadata-client';
 import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
-import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
 import { AvailableProfile, YtDlpFormat, YtDlpMetadata } from './ytdlp.types';
 
 @Injectable()
@@ -9,7 +11,8 @@ export class ProfileCatalogueService {
 
   constructor(
     private readonly formatSize: YtDlpFormatSizeService,
-    private readonly metadataClient: YtDlpMetadataClient,
+    @Inject(VIDEO_METADATA_CLIENT)
+    private readonly metadataClient: VideoMetadataClient,
   ) {}
 
   async getAvailableProfiles(url: string): Promise<AvailableProfile[]> {
@@ -31,6 +34,22 @@ export class ProfileCatalogueService {
     return this.buildProfiles(metadata);
   }
 
+  async getProfile(
+    url: string,
+    profileId: string,
+  ): Promise<AvailableProfile | null> {
+    const metadata = await this.metadataClient.getMetadata(url);
+    if (!metadata) {
+      return null;
+    }
+
+    return (
+      this.buildProfiles(metadata).find(
+        (profile) => profile.id === profileId || profile.format === profileId,
+      ) ?? null
+    );
+  }
+
   async getFormatSize(url: string, formatId: string): Promise<number> {
     const metadata = await this.metadataClient.getMetadata(url);
     if (!metadata) {
@@ -46,7 +65,9 @@ export class ProfileCatalogueService {
     const seen = new Set<string>();
 
     const best = metadata.formats.find(
-      (format) => format.formatId === metadata.formatId,
+      (format) =>
+        format.formatId === metadata.formatId &&
+        this.isSupportedDirectFormat(format),
     );
     this.pushProfile(profiles, seen, metadata, best);
 
@@ -79,24 +100,37 @@ export class ProfileCatalogueService {
       return;
     }
 
-    const key = seenKey ?? format.formatId;
-    if (seen.has(key)) {
+    if (!this.isSupportedDirectFormat(format)) {
       return;
     }
 
-    seen.add(key);
+    const keys = [seenKey, format.formatId].filter(
+      (value): value is string => Boolean(value),
+    );
+    if (keys.some((key) => seen.has(key))) {
+      return;
+    }
+
+    keys.forEach((key) => seen.add(key));
     const hasAudio = this.hasAudio(format);
+    const hasVideo = this.hasVideo(format);
+    const output = inferDownloadOutput(format);
     profiles.push({
       id: format.formatId,
       label: overrides?.label ?? this.formatLabel(format),
       format: format.formatId,
+      ext: output.extension,
+      contentType: output.contentType,
+      mediaKind: output.mediaKind,
       resolution:
         overrides?.resolution ??
         (format.height ? `${format.height}p` : undefined),
-      codec: format.vcodec ? this.cleanCodec(format.vcodec) : undefined,
+      codec: hasVideo ? this.cleanCodec(format.vcodec ?? '') : undefined,
       audioCodec: hasAudio ? this.cleanCodec(format.acodec ?? '') : undefined,
       estimatedSize: this.formatSize.getActualFormatSize(format, metadata),
-      isAudioOnly: overrides?.isAudioOnly ?? false,
+      hasAudio,
+      hasVideo,
+      isAudioOnly: overrides?.isAudioOnly ?? (!hasVideo && hasAudio),
     });
   }
 
@@ -108,16 +142,11 @@ export class ProfileCatalogueService {
       .filter(
         (format) =>
           this.hasVideo(format) &&
+          this.hasAudio(format) &&
           format.height === height &&
           format.ext === 'mp4',
       )
       .sort((a, b) => {
-        const aHasAudio = this.hasAudio(a) ? 1 : 0;
-        const bHasAudio = this.hasAudio(b) ? 1 : 0;
-        if (aHasAudio !== bHasAudio) {
-          return bHasAudio - aHasAudio;
-        }
-
         const aBitrate = a.abr ?? a.tbr ?? 0;
         const bBitrate = b.abr ?? b.tbr ?? 0;
         if (aBitrate !== bBitrate) {
@@ -142,9 +171,7 @@ export class ProfileCatalogueService {
       return undefined;
     }
 
-    return this.hasAudio(format)
-      ? `${height}p with audio`
-      : `${height}p video only`;
+    return `${height}p with audio`;
   }
 
   private formatLabel(format: YtDlpFormat): string {
@@ -191,5 +218,11 @@ export class ProfileCatalogueService {
 
   private hasAudio(format: YtDlpFormat): boolean {
     return Boolean(format.acodec && format.acodec !== 'none');
+  }
+
+  private isSupportedDirectFormat(format: YtDlpFormat): boolean {
+    const hasVideo = this.hasVideo(format);
+    const hasAudio = this.hasAudio(format);
+    return (hasVideo && hasAudio) || (!hasVideo && hasAudio);
   }
 }

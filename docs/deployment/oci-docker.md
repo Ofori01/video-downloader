@@ -3,8 +3,8 @@
 This deployment runs the production split architecture on one Oracle Cloud VM:
 
 - `frontend`: Next.js UI
-- `backend-api`: Nest HTTP API
-- `backend-worker`: BullMQ worker and cleanup scheduler
+- `backend-api`: Nest HTTP API from the lightweight `api-runtime` image target
+- `backend-worker`: BullMQ worker and cleanup scheduler from the media-enabled `worker-runtime` image target
 - `redis`: local Redis queue
 - `caddy`: HTTPS reverse proxy
 
@@ -114,3 +114,12 @@ Caddy serves one public origin:
 - `/system/*`, `/video/*`, `/download/*` -> `backend-api`
 
 The frontend image is built with `NEXT_PUBLIC_API_BASE_URL=/`, so browser requests are same-origin and do not need cross-origin CORS in production.
+
+## Image Targets
+
+`docker-compose.prod.yml` builds two backend images from `backend/Dockerfile`:
+
+- `video-downloader-backend-api:local`: API and migration runtime; does not install Python or the pip-installed `yt-dlp` toolchain.
+- `video-downloader-backend-worker:local`: worker runtime; installs and verifies `yt-dlp` during the Docker build. It does not install `ffmpeg` for the direct-format production path.
+
+The API health endpoint reports database, Redis, queue, and connected worker readiness. Media binary readiness is enforced by the worker image build.

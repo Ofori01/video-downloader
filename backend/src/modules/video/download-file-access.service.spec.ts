@@ -7,6 +7,7 @@ interface FileAccessRecord {
   key?: string;
   sessionId?: string;
   status?: FileStatus;
+  contentType?: string | null;
   downloadedAt?: Date | null;
   expiresAt?: Date | null;
 }
@@ -98,6 +99,7 @@ describe('DownloadFileAccessService', () => {
       key: 'videos/file-1.mp4',
       sessionId: 'session-1',
       status: FileStatus.READY,
+      contentType: 'video/mp4',
       downloadedAt: null,
       expiresAt: existingExpiry,
     });
@@ -115,6 +117,7 @@ describe('DownloadFileAccessService', () => {
     );
     expect(storageService.getSignedDownloadUrl).toHaveBeenCalledWith(
       'videos/file-1.mp4',
+      'video/mp4',
     );
   });
 });

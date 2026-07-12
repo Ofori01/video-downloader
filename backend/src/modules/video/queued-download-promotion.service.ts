@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { QueueProducerService } from '../queue/queue.producer.service';
 import { DownloadFileStore } from './download-file-store.service';
+import { coerceDownloadOutput } from './download-output';
 import { DownloadReservationService } from './download-reservation.service';
 
 @Injectable()
@@ -53,6 +54,11 @@ export class QueuedDownloadPromotionService {
           sessionId: file.sessionId,
           reservedBytes: estimatedSize,
           profileId: file.profileId ?? undefined,
+          output: coerceDownloadOutput({
+            mediaKind: file.mediaKind === 'audio' ? 'audio' : 'video',
+            extension: file.outputExtension ?? undefined,
+            contentType: file.contentType ?? undefined,
+          }),
         });
 
         await this.attachQueueJob(file.id, jobId);

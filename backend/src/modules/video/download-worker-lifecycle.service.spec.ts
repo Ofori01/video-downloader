@@ -29,13 +29,22 @@ describe('DownloadWorkerLifecycleService', () => {
   it('sets expiry when marking a file ready', async () => {
     const service = createService();
 
-    await service.markReady('file-1', 'videos/file-1.mp4', 2048);
+    await service.markReady('file-1', 'audio/file-1.m4a', 2048, {
+      mediaKind: 'audio',
+      extension: 'm4a',
+      contentType: 'audio/mp4',
+    });
 
     expect(fileStore.markReady).toHaveBeenCalledWith(
       'file-1',
-      'videos/file-1.mp4',
+      'audio/file-1.m4a',
       2048,
       expect.any(Date),
+      {
+        mediaKind: 'audio',
+        extension: 'm4a',
+        contentType: 'audio/mp4',
+      },
     );
   });
 

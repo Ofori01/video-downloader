@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { Repository } from 'typeorm';
 import { FileEntity, FileStatus } from '../../entities/file.entity';
+import { coerceDownloadOutput, DownloadOutput } from './download-output';
 
 export interface CreateDownloadFileInput {
   url: string;
   sessionId: string;
   estimatedSize: number;
   profileId?: string;
+  output: DownloadOutput;
 }
 
 @Injectable()
@@ -21,6 +23,7 @@ export class DownloadFileStore {
   async createQueuedDownload(
     input: CreateDownloadFileInput,
   ): Promise<FileEntity> {
+    const output = coerceDownloadOutput(input.output);
     const file = this.fileRepository.create({
       key: `pending/${randomUUID()}`,
       sourceUrl: input.url,
@@ -28,6 +31,9 @@ export class DownloadFileStore {
       status: FileStatus.QUEUED,
       sessionId: input.sessionId,
       profileId: input.profileId ?? null,
+      mediaKind: output.mediaKind,
+      outputExtension: output.extension,
+      contentType: output.contentType,
     });
 
     return this.fileRepository.save(file);
@@ -36,6 +42,7 @@ export class DownloadFileStore {
   async createProcessingDownload(
     input: CreateDownloadFileInput,
   ): Promise<FileEntity> {
+    const output = coerceDownloadOutput(input.output);
     const file = this.fileRepository.create({
       key: `pending/${randomUUID()}`,
       sourceUrl: input.url,
@@ -43,6 +50,9 @@ export class DownloadFileStore {
       status: FileStatus.PROCESSING,
       sessionId: input.sessionId,
       profileId: input.profileId ?? null,
+      mediaKind: output.mediaKind,
+      outputExtension: output.extension,
+      contentType: output.contentType,
     });
 
     return this.fileRepository.save(file);
@@ -68,13 +78,18 @@ export class DownloadFileStore {
     key: string,
     size: number,
     expiresAt: Date,
+    output: DownloadOutput,
   ): Promise<void> {
+    const coercedOutput = coerceDownloadOutput(output);
     await this.fileRepository.update(fileId, {
       key,
       size: String(size),
       status: FileStatus.READY,
       expiresAt,
       errorReason: null,
+      mediaKind: coercedOutput.mediaKind,
+      outputExtension: coercedOutput.extension,
+      contentType: coercedOutput.contentType,
     });
   }
 

@@ -1,12 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ProfileCatalogueService } from './profile-catalogue.service';
-import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
+import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
+import type { VideoMetadataClient } from './video-metadata-client';
 import { YtDlpMetadata } from './ytdlp.types';
 
 @Injectable()
 export class DownloadSizeEstimator {
   constructor(
-    private readonly metadataClient: YtDlpMetadataClient,
+    @Inject(VIDEO_METADATA_CLIENT)
+    private readonly metadataClient: VideoMetadataClient,
     private readonly profileCatalogue: ProfileCatalogueService,
   ) {}
 

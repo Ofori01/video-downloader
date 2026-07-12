@@ -14,7 +14,13 @@ import {
   DownloadAdmissionDecision,
   DownloadReservationService,
 } from './download-reservation.service';
+import {
+  coerceDownloadOutput,
+  DEFAULT_VIDEO_OUTPUT,
+  DownloadOutput,
+} from './download-output';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
+import { ProfileCatalogueService } from './profile-catalogue.service';
 
 export interface SubmitDownloadCommand {
   url: string;
@@ -36,6 +42,7 @@ export class DownloadIntakeService {
   constructor(
     private readonly config: AppConfigService,
     private readonly fileStore: DownloadFileStore,
+    private readonly profileCatalogue: ProfileCatalogueService,
     private readonly queueProducer: QueueProducerService,
     private readonly reservationService: DownloadReservationService,
     private readonly sessionService: SessionService,
@@ -56,10 +63,8 @@ export class DownloadIntakeService {
       throw new ForbiddenException('Session has exceeded job rate limit');
     }
 
-    const estimatedSize = await this.sizeEstimator.estimate(
-      command.url,
-      command.profileId,
-    );
+    const { estimatedSize, output } =
+      await this.resolveDownloadSelection(command);
     const decision = await this.reservationService.evaluateAdmission(
       command.sessionId,
       estimatedSize,
@@ -75,6 +80,7 @@ export class DownloadIntakeService {
         sessionId: command.sessionId,
         estimatedSize,
         profileId: command.profileId,
+        output,
       });
 
       return {
@@ -96,6 +102,7 @@ export class DownloadIntakeService {
         sessionId: command.sessionId,
         estimatedSize,
         profileId: command.profileId,
+        output,
       });
       fileId = file.id;
 
@@ -105,6 +112,7 @@ export class DownloadIntakeService {
         sessionId: command.sessionId,
         reservedBytes: estimatedSize,
         profileId: command.profileId,
+        output,
       });
 
       await this.attachQueueJob(file.id, jobId);
@@ -126,6 +134,39 @@ export class DownloadIntakeService {
 
       throw error;
     }
+  }
+
+  private async resolveDownloadSelection(
+    command: SubmitDownloadCommand,
+  ): Promise<{ estimatedSize: number; output: DownloadOutput }> {
+    if (!command.profileId) {
+      const estimatedSize = await this.sizeEstimator.estimate(command.url);
+      return { estimatedSize, output: DEFAULT_VIDEO_OUTPUT };
+    }
+
+    const profile = await this.profileCatalogue.getProfile(
+      command.url,
+      command.profileId,
+    );
+    if (!profile) {
+      throw new BadRequestException('Selected profile is not available');
+    }
+
+    const estimatedSize = Number(profile.estimatedSize ?? 0);
+    if (!Number.isFinite(estimatedSize) || estimatedSize <= 0) {
+      throw new BadRequestException(
+        'Unable to estimate file size - selected format has no size information',
+      );
+    }
+
+    return {
+      estimatedSize,
+      output: coerceDownloadOutput({
+        mediaKind: profile.mediaKind,
+        extension: profile.ext,
+        contentType: profile.contentType,
+      }),
+    };
   }
 
   private async attachQueueJob(fileId: string, jobId: string): Promise<void> {

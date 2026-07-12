@@ -9,10 +9,15 @@ export interface AvailableProfile {
   id: string;
   label: string;
   format: string;
+  ext: string;
+  contentType: string;
+  mediaKind: "audio" | "video";
   resolution?: string;
   codec?: string;
   audioCodec?: string;
   estimatedSize?: number;
+  hasAudio: boolean;
+  hasVideo: boolean;
   isAudioOnly: boolean;
 }
 
@@ -36,6 +41,9 @@ export interface VideoFile {
   status: FileStatus;
   sessionId: string;
   profileId: string | null;
+  mediaKind: "audio" | "video" | null;
+  outputExtension: string | null;
+  contentType: string | null;
   createdAt: string;
   downloadedAt: string | null;
   expiresAt: string | null;

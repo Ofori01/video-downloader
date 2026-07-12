@@ -1,9 +1,18 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:20-slim AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,id=frontend-npm-cache,target=/root/.npm \
+    npm ci
+
+FROM deps AS pruner
+
+RUN npm prune --omit=dev \
+    && npm cache clean --force \
+    && rm -rf node_modules/@next/*-musl node_modules/@img/*musl*
 
 FROM node:20-slim AS builder
 
@@ -26,7 +35,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=pruner /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts

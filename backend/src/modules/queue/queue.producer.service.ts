@@ -3,13 +3,13 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DOWNLOAD_JOB_NAME } from './queue.constants';
 import { VIDEO_QUEUE_NAME } from './queue-name';
-import { DownloadVideoJobData } from './queue.types';
+import { DownloadVideoJobData, VideoQueueJobData } from './queue.types';
 
 @Injectable()
 export class QueueProducerService {
   constructor(
     @InjectQueue(VIDEO_QUEUE_NAME)
-    private readonly queue: Queue<DownloadVideoJobData>,
+    private readonly queue: Queue<VideoQueueJobData>,
   ) {}
 
   async enqueueDownloadJob(data: DownloadVideoJobData): Promise<string> {

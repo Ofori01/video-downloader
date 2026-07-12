@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import { DownloadFileStore } from './download-file-store.service';
+import { DownloadOutput } from './download-output';
 import { DownloadReservationService } from './download-reservation.service';
 
 @Injectable()
@@ -11,13 +12,18 @@ export class DownloadWorkerLifecycleService {
     private readonly reservationService: DownloadReservationService,
   ) {}
 
-  async markReady(fileId: string, key: string, size: number): Promise<void> {
+  async markReady(
+    fileId: string,
+    key: string,
+    size: number,
+    output: DownloadOutput,
+  ): Promise<void> {
     const now = new Date();
     const expiresAt = new Date(
       now.getTime() + this.config.fileTtlSeconds * 1000,
     );
 
-    await this.fileStore.markReady(fileId, key, size, expiresAt);
+    await this.fileStore.markReady(fileId, key, size, expiresAt, output);
   }
 
   async markFailed(fileId: string, reason: string): Promise<void> {

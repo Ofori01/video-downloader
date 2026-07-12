@@ -13,7 +13,5 @@ export interface HealthResponse {
     redis: ServiceCheck;
     queue: ServiceCheck;
     worker: ServiceCheck;
-    ytDlp: ServiceCheck;
-    ffmpeg: ServiceCheck;
   };
 }

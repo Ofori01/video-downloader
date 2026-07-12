@@ -19,6 +19,10 @@ describe('DownloadIntakeService', () => {
     markFailed: jest.fn(),
   };
 
+  const profileCatalogue = {
+    getProfile: jest.fn(),
+  };
+
   const queueProducer = {
     enqueueDownloadJob: jest.fn(),
   };
@@ -41,6 +45,7 @@ describe('DownloadIntakeService', () => {
     new DownloadIntakeService(
       config as never,
       fileStore as never,
+      profileCatalogue as never,
       queueProducer as never,
       reservationService as never,
       sessionService as never,
@@ -52,6 +57,14 @@ describe('DownloadIntakeService', () => {
     config.enableNewRequests = true;
     sessionService.incrementSessionJobs.mockResolvedValue(1);
     sizeEstimator.estimate.mockResolvedValue(1000);
+    profileCatalogue.getProfile.mockResolvedValue({
+      id: '18',
+      format: '18',
+      ext: 'mp4',
+      contentType: 'video/mp4',
+      mediaKind: 'video',
+      estimatedSize: 1000,
+    });
     reservationService.evaluateAdmission.mockResolvedValue({ kind: 'process' });
     reservationService.reserve.mockResolvedValue(undefined);
     reservationService.release.mockResolvedValue(undefined);
@@ -111,6 +124,11 @@ describe('DownloadIntakeService', () => {
       sessionId: 'session-1',
       estimatedSize: 1000,
       profileId: '18',
+      output: {
+        mediaKind: 'video',
+        extension: 'mp4',
+        contentType: 'video/mp4',
+      },
     });
     expect(reservationService.reserve).not.toHaveBeenCalled();
     expect(queueProducer.enqueueDownloadJob).not.toHaveBeenCalled();
@@ -140,6 +158,11 @@ describe('DownloadIntakeService', () => {
       sessionId: 'session-1',
       estimatedSize: 1000,
       profileId: '18',
+      output: {
+        mediaKind: 'video',
+        extension: 'mp4',
+        contentType: 'video/mp4',
+      },
     });
     expect(queueProducer.enqueueDownloadJob).toHaveBeenCalledWith({
       fileId: 'file-processing-1',
@@ -147,11 +170,31 @@ describe('DownloadIntakeService', () => {
       sessionId: 'session-1',
       reservedBytes: 1000,
       profileId: '18',
+      output: {
+        mediaKind: 'video',
+        extension: 'mp4',
+        contentType: 'video/mp4',
+      },
     });
     expect(fileStore.attachQueueJob).toHaveBeenCalledWith(
       'file-processing-1',
       'job-1',
     );
+  });
+
+  it('rejects an unavailable selected profile', async () => {
+    const service = createService();
+    profileCatalogue.getProfile.mockResolvedValue(null);
+
+    await expect(
+      service.submit({
+        url: 'https://example.com/video',
+        sessionId: 'session-1',
+        profileId: 'missing',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(reservationService.evaluateAdmission).not.toHaveBeenCalled();
   });
 
   it('maps admission rejection to a bad request for file size limits', async () => {
