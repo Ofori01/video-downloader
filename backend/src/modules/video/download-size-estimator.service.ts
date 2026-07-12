@@ -1,37 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { YtDlpService } from './ytdlp.service';
-
-interface YtDlpRequestedDownload {
-  filesize?: unknown;
-  filesize_approx?: unknown;
-}
-
-interface YtDlpFormat {
-  format_id?: unknown;
-  filesize?: unknown;
-  filesize_approx?: unknown;
-  tbr?: unknown;
-  abr?: unknown;
-  vbr?: unknown;
-  duration?: unknown;
-}
-
-interface YtDlpMetadata {
-  filesize?: unknown;
-  filesize_approx?: unknown;
-  requested_downloads?: YtDlpRequestedDownload[];
-  formats?: YtDlpFormat[];
-  format_id?: unknown;
-  duration?: unknown;
-}
+import { ProfileCatalogueService } from './profile-catalogue.service';
+import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
+import { YtDlpMetadata } from './ytdlp.types';
 
 @Injectable()
 export class DownloadSizeEstimator {
-  constructor(private readonly ytDlpService: YtDlpService) {}
+  constructor(
+    private readonly metadataClient: YtDlpMetadataClient,
+    private readonly profileCatalogue: ProfileCatalogueService,
+  ) {}
 
   async estimate(url: string, profileId?: string): Promise<number> {
     if (profileId) {
-      const estimatedSize = await this.ytDlpService.getFormatSize(
+      const estimatedSize = await this.profileCatalogue.getFormatSize(
         url,
         profileId,
       );
@@ -45,45 +26,45 @@ export class DownloadSizeEstimator {
       return estimatedSize;
     }
 
-    const metadata = this.asMetadata(await this.ytDlpService.getMetadata(url));
-    const estimatedSize = this.estimateFromMetadata(metadata);
+    const metadata = await this.metadataClient.getMetadata(url);
+    const estimatedSize = metadata ? this.estimateFromMetadata(metadata) : 0;
 
     if (estimatedSize > 0) {
       return estimatedSize;
     }
 
     throw new BadRequestException(
-      Array.isArray(metadata.formats)
+      metadata?.formats.length
         ? 'Unable to estimate file size - selected format has no size information'
         : 'Unable to estimate file size for this source. Try using the profile selection first.',
     );
   }
 
   private estimateFromMetadata(metadata: YtDlpMetadata): number {
-    const requestedDownload = metadata.requested_downloads?.[0];
+    const requestedDownload = metadata.requestedDownloads[0];
     const raw =
       metadata.filesize ??
-      metadata.filesize_approx ??
+      metadata.filesizeApprox ??
       requestedDownload?.filesize ??
-      requestedDownload?.filesize_approx;
+      requestedDownload?.filesizeApprox;
 
     const parsed = this.parsePositiveNumber(raw);
     if (parsed !== null) {
       return parsed;
     }
 
-    const formats = Array.isArray(metadata.formats) ? metadata.formats : [];
-    if (formats.length === 0) {
+    if (metadata.formats.length === 0) {
       return 0;
     }
 
     const best =
-      formats.find((format) => format.format_id === metadata.format_id) ??
-      formats[0];
+      metadata.formats.find(
+        (format) => format.formatId === metadata.formatId,
+      ) ?? metadata.formats[0];
 
     const directSize =
       this.parsePositiveNumber(best.filesize) ??
-      this.parsePositiveNumber(best.filesize_approx);
+      this.parsePositiveNumber(best.filesizeApprox);
     if (directSize !== null) {
       return directSize;
     }
@@ -103,14 +84,6 @@ export class DownloadSizeEstimator {
     }
 
     return 0;
-  }
-
-  private asMetadata(value: unknown): YtDlpMetadata {
-    if (!value || typeof value !== 'object') {
-      return {};
-    }
-
-    return value as YtDlpMetadata;
   }
 
   private parsePositiveNumber(value: unknown): number | null {

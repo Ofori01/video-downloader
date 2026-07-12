@@ -16,14 +16,14 @@ import { CreateVideoJobDto } from './dto/create-video-job.dto';
 import { AvailableProfileDto } from './dto/available-profiles.dto';
 import { DownloadFileAccessService } from './download-file-access.service';
 import { DownloadIntakeService } from './download-intake.service';
-import { YtDlpService } from './ytdlp.service';
+import { ProfileCatalogueService } from './profile-catalogue.service';
 
 @Controller()
 export class VideoController {
   constructor(
     private readonly downloadFileAccess: DownloadFileAccessService,
     private readonly downloadIntake: DownloadIntakeService,
-    private readonly ytDlpService: YtDlpService,
+    private readonly profileCatalogue: ProfileCatalogueService,
   ) {}
 
   @Post('video/jobs')
@@ -49,7 +49,7 @@ export class VideoController {
       return [];
     }
 
-    const profiles = await this.ytDlpService.getAvailableProfiles(url);
+    const profiles = await this.profileCatalogue.getAvailableProfiles(url);
     return profiles;
   }
 

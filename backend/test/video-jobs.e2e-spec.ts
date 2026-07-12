@@ -11,7 +11,7 @@ import { DownloadIntakeService } from '../src/modules/video/download-intake.serv
 import { SessionMiddleware } from '../src/modules/session/session.middleware';
 import { AppConfigService } from '../src/config/app-config.service';
 import { SessionService } from '../src/modules/session/session.service';
-import { YtDlpService } from '../src/modules/video/ytdlp.service';
+import { ProfileCatalogueService } from '../src/modules/video/profile-catalogue.service';
 
 interface DownloadIntakeSubmitCommand {
   url: string;
@@ -51,7 +51,7 @@ const getFirstSetCookie = (headers: IncomingHttpHeaders): string => {
       useValue: downloadFileAccessMock,
     },
     {
-      provide: YtDlpService,
+      provide: ProfileCatalogueService,
       useValue: {
         getAvailableProfiles: jest.fn(),
       },

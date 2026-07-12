@@ -6,16 +6,21 @@ import { QueueModule } from '../queue/queue.module';
 import { SessionModule } from '../session/session.module';
 import { StorageModule } from '../storage/storage.module';
 import { DownloadCleanupCoordinator } from './download-cleanup-coordinator.service';
+import { DownloadFormatResolver } from './download-format-resolver.service';
 import { DownloadFileAccessService } from './download-file-access.service';
 import { DownloadFileStore } from './download-file-store.service';
 import { DownloadIntakeService } from './download-intake.service';
 import { DownloadReservationService } from './download-reservation.service';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
+import { ProfileCatalogueService } from './profile-catalogue.service';
 import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
 import { VideoController } from './video.controller';
 import { VideoProcessor } from './video.processor';
-import { YtDlpService } from './ytdlp.service';
+import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
+import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
+import { YtDlpStreamClient } from './ytdlp-stream-client.service';
+import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
 
 @Module({
   imports: [
@@ -28,15 +33,20 @@ import { YtDlpService } from './ytdlp.service';
   controllers: [VideoController],
   providers: [
     DownloadCleanupCoordinator,
+    DownloadFormatResolver,
     DownloadFileAccessService,
     DownloadFileStore,
     DownloadIntakeService,
     DownloadReservationService,
     DownloadSizeEstimator,
     DownloadWorkerLifecycleService,
+    ProfileCatalogueService,
     QueuedDownloadPromotionService,
     VideoProcessor,
-    YtDlpService,
+    YtDlpFormatSizeService,
+    YtDlpMetadataClient,
+    YtDlpStreamClient,
+    YtDlpStreamCommandBuilder,
   ],
   exports: [
     DownloadCleanupCoordinator,

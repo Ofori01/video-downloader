@@ -6,7 +6,7 @@ import { VIDEO_QUEUE_NAME } from '../queue/queue-name';
 import { DownloadVideoJobData } from '../queue/queue.types';
 import { StorageService } from '../storage/storage.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
-import { YtDlpService } from './ytdlp.service';
+import { YtDlpStreamClient } from './ytdlp-stream-client.service';
 
 @Processor(VIDEO_QUEUE_NAME, {
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 3),
@@ -33,7 +33,7 @@ export class VideoProcessor extends WorkerHost {
       | 'markFailed'
       | 'releaseReservation'
     >,
-    private readonly ytDlpService: YtDlpService,
+    private readonly ytDlpStreamClient: YtDlpStreamClient,
   ) {
     super();
   }
@@ -55,10 +55,13 @@ export class VideoProcessor extends WorkerHost {
 
     const key = `videos/${fileId}.mp4`;
     const useFallbackProfile = job.attemptsMade > 0;
-    const { stream, diagnostics } = this.ytDlpService.getDownloadStream(url, {
-      fallbackProfile: useFallbackProfile && !job.data.profileId,
-      formatId: job.data.profileId,
-    });
+    const { stream, diagnostics } = this.ytDlpStreamClient.getDownloadStream(
+      url,
+      {
+        fallbackProfile: useFallbackProfile && !job.data.profileId,
+        formatId: job.data.profileId,
+      },
+    );
     let streamFailure: unknown;
     let phase: 'upload' | 'mark_ready' | 'reconcile_reservation' = 'upload';
 
