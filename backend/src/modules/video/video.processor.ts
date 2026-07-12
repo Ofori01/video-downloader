@@ -5,7 +5,7 @@ import { DOWNLOAD_JOB_NAME } from '../queue/queue.constants';
 import { VIDEO_QUEUE_NAME } from '../queue/queue-name';
 import { DownloadVideoJobData } from '../queue/queue.types';
 import { StorageService } from '../storage/storage.service';
-import { VideoService } from './video.service';
+import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
 import { YtDlpService } from './ytdlp.service';
 
 @Processor(VIDEO_QUEUE_NAME, {
@@ -25,9 +25,9 @@ export class VideoProcessor extends WorkerHost {
 
   constructor(
     private readonly storageService: StorageService,
-    @Inject(VideoService)
-    private readonly videoService: Pick<
-      VideoService,
+    @Inject(DownloadWorkerLifecycleService)
+    private readonly downloadLifecycle: Pick<
+      DownloadWorkerLifecycleService,
       | 'markReady'
       | 'reconcileReservationForCompletedFile'
       | 'markFailed'
@@ -95,10 +95,10 @@ export class VideoProcessor extends WorkerHost {
       await this.storageService.uploadStream(key, stream);
 
       phase = 'mark_ready';
-      await this.videoService.markReady(fileId, key, bytes);
+      await this.downloadLifecycle.markReady(fileId, key, bytes);
 
       phase = 'reconcile_reservation';
-      await this.videoService.reconcileReservationForCompletedFile(
+      await this.downloadLifecycle.reconcileReservationForCompletedFile(
         sessionId,
         reservedBytes,
         bytes,
@@ -135,8 +135,11 @@ export class VideoProcessor extends WorkerHost {
       );
 
       if (isFinalAttempt) {
-        await this.videoService.markFailed(fileId, String(error));
-        await this.videoService.releaseReservation(sessionId, reservedBytes);
+        await this.downloadLifecycle.markFailed(fileId, String(error));
+        await this.downloadLifecycle.releaseReservation(
+          sessionId,
+          reservedBytes,
+        );
       }
 
       throw error;

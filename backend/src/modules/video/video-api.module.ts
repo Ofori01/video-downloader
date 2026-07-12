@@ -5,8 +5,12 @@ import { FileEntity } from '../../entities/file.entity';
 import { QueueModule } from '../queue/queue.module';
 import { SessionModule } from '../session/session.module';
 import { StorageModule } from '../storage/storage.module';
+import { DownloadFileAccessService } from './download-file-access.service';
+import { DownloadFileStore } from './download-file-store.service';
+import { DownloadIntakeService } from './download-intake.service';
+import { DownloadReservationService } from './download-reservation.service';
+import { DownloadSizeEstimator } from './download-size-estimator.service';
 import { VideoController } from './video.controller';
-import { VideoService } from './video.service';
 import { YtDlpService } from './ytdlp.service';
 
 @Module({
@@ -18,7 +22,13 @@ import { YtDlpService } from './ytdlp.service';
     StorageModule,
   ],
   controllers: [VideoController],
-  providers: [VideoService, YtDlpService],
-  exports: [VideoService],
+  providers: [
+    DownloadFileAccessService,
+    DownloadFileStore,
+    DownloadIntakeService,
+    DownloadReservationService,
+    DownloadSizeEstimator,
+    YtDlpService,
+  ],
 })
 export class VideoApiModule {}

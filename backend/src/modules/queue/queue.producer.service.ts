@@ -14,6 +14,7 @@ export class QueueProducerService {
 
   async enqueueDownloadJob(data: DownloadVideoJobData): Promise<string> {
     const job = await this.queue.add(DOWNLOAD_JOB_NAME, data, {
+      jobId: data.fileId,
       attempts: 2,
       backoff: {
         type: 'exponential',
