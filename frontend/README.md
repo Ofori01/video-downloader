@@ -45,8 +45,18 @@ This frontend follows a standardized layered approach:
 
 ### Environment
 
-- `NEXT_PUBLIC_API_BASE_URL` controls backend API base URL for browser requests
+- Browser requests default to same-origin `/api` via Next Route Handlers
+- `NEXT_PUBLIC_API_BASE_URL` is optional and defaults to `/api`
+- Native Next API runtime uses server-side env vars for Postgres, Redis, queue, and R2 integrations
 - Requests are made with credentials enabled for session cookie support
+
+### Migration status
+
+- `GET /api/system/health` is implemented natively in Next.js server runtime (no Nest proxy)
+- `POST /api/video/jobs` is implemented natively in Next.js server runtime (no Nest proxy)
+- `GET /api/video/files/:id` is implemented natively in Next.js server runtime (no Nest proxy)
+- `GET /api/download/:id` is implemented natively in Next.js server runtime (no Nest proxy)
+- `GET /api/video/profiles` is implemented natively in Next.js server runtime (no Nest proxy)
 
 ## UI Foundation
 

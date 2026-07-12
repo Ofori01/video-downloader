@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowRight,
   Download,
@@ -46,30 +46,45 @@ const STATUS_ICON: Record<FileStatus, React.ReactNode> = {
 };
 
 const JOB_IDS_STORAGE_KEY = "video-downloader:job-file-ids";
+const JOB_IDS_STORAGE_EVENT = "video-downloader:job-file-ids-change";
 const MAX_STORED_JOB_IDS = 100;
+const EMPTY_JOB_IDS: string[] = [];
 
-function readStoredJobIds(): string[] {
-  if (typeof window === "undefined") {
-    return [];
+let cachedJobIdsRaw: string | null | undefined;
+let cachedJobIdsSnapshot: string[] = EMPTY_JOB_IDS;
+
+function parseStoredJobIds(raw: string | null): string[] {
+  if (!raw) {
+    return EMPTY_JOB_IDS;
   }
 
   try {
-    const raw = window.localStorage.getItem(JOB_IDS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
-      return [];
+      return EMPTY_JOB_IDS;
     }
 
     return parsed
       .filter((item): item is string => typeof item === "string")
       .slice(0, MAX_STORED_JOB_IDS);
   } catch {
-    return [];
+    return EMPTY_JOB_IDS;
   }
+}
+
+function readStoredJobIds(): string[] {
+  if (typeof window === "undefined") {
+    return EMPTY_JOB_IDS;
+  }
+
+  const raw = window.localStorage.getItem(JOB_IDS_STORAGE_KEY);
+  if (raw === cachedJobIdsRaw) {
+    return cachedJobIdsSnapshot;
+  }
+
+  cachedJobIdsRaw = raw;
+  cachedJobIdsSnapshot = parseStoredJobIds(raw);
+  return cachedJobIdsSnapshot;
 }
 
 function saveStoredJobIds(fileIds: string[]): void {
@@ -77,19 +92,53 @@ function saveStoredJobIds(fileIds: string[]): void {
     return;
   }
 
-  window.localStorage.setItem(
-    JOB_IDS_STORAGE_KEY,
-    JSON.stringify(fileIds.slice(0, MAX_STORED_JOB_IDS)),
-  );
+  const nextSnapshot = fileIds.slice(0, MAX_STORED_JOB_IDS);
+  const nextRaw = JSON.stringify(nextSnapshot);
+  if (nextRaw === cachedJobIdsRaw) {
+    return;
+  }
+
+  cachedJobIdsRaw = nextRaw;
+  cachedJobIdsSnapshot = nextSnapshot;
+  window.localStorage.setItem(JOB_IDS_STORAGE_KEY, nextRaw);
+
+  window.dispatchEvent(new Event(JOB_IDS_STORAGE_EVENT));
+}
+
+function subscribeStoredJobIds(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === JOB_IDS_STORAGE_KEY) {
+      onStoreChange();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(JOB_IDS_STORAGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(JOB_IDS_STORAGE_EVENT, onStoreChange);
+  };
+}
+
+function getStoredJobIdsServerSnapshot(): string[] {
+  return EMPTY_JOB_IDS;
 }
 
 export function HomeShell() {
-  const [isMounted, setIsMounted] = useState(false);
   const [url, setUrl] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [fileIds, setFileIds] = useState<string[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
-    null
+    null,
+  );
+  const fileIds = useSyncExternalStore(
+    subscribeStoredJobIds,
+    readStoredJobIds,
+    getStoredJobIdsServerSnapshot,
   );
 
   const healthQuery = useHealthStatus();
@@ -116,21 +165,6 @@ export function HomeShell() {
   const statusError = jobStatuses.firstError
     ? getErrorMessage(jobStatuses.firstError)
     : null;
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const stored = readStoredJobIds();
-    if (stored.length > 0) {
-      setFileIds(stored);
-    }
-  }, []);
-
-  useEffect(() => {
-    saveStoredJobIds(fileIds);
-  }, [fileIds]);
 
   const jobItems = jobStatuses.items.map(videoService.toJobViewModel);
 
@@ -169,13 +203,10 @@ export function HomeShell() {
                     url: normalizedUrl,
                     profileId: selectedProfileId,
                   });
-                  setFileIds((prev) => {
-                    const deduped = prev.filter((id) => id !== result.fileId);
-                    return [result.fileId, ...deduped].slice(
-                      0,
-                      MAX_STORED_JOB_IDS,
-                    );
-                  });
+                  const deduped = fileIds.filter((id) => id !== result.fileId);
+                  saveStoredJobIds(
+                    [result.fileId, ...deduped].slice(0, MAX_STORED_JOB_IDS),
+                  );
                   setUrl("");
                   setSelectedProfileId(null);
                 } catch {
@@ -207,7 +238,6 @@ export function HomeShell() {
                   type="submit"
                   size="lg"
                   disabled={
-                    !isMounted ||
                     !isValid ||
                     !selectedProfileId ||
                     createJobMutation.isPending
@@ -235,7 +265,7 @@ export function HomeShell() {
                   Enter a valid URL starting with http:// or https://.
                 </p>
               ) : null}
-              {isValid && isMounted && (
+              {isValid && (
                 <div className="rounded-[var(--radius-md)] border border-[var(--border)] p-4">
                   <ProfileSelector
                     profiles={profilesQuery.data ?? []}
