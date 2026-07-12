@@ -102,11 +102,11 @@ export class AppConfigService {
   }
 
   get ytDlpBinaryPath(): string | undefined {
-    return this.configService.get<string>('YTDLP_BINARY_PATH');
+    return this.getOptionalString('YTDLP_BINARY_PATH');
   }
 
   get ffmpegBinaryPath(): string | undefined {
-    return this.configService.get<string>('FFMPEG_BINARY_PATH');
+    return this.getOptionalString('FFMPEG_BINARY_PATH');
   }
 
   private getOrThrow(key: string): string {
@@ -134,5 +134,11 @@ export class AppConfigService {
     }
 
     return value;
+  }
+
+  private getOptionalString(key: string): string | undefined {
+    const value = this.configService.get<string>(key);
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
   }
 }

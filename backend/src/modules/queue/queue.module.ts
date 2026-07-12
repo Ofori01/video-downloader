@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AppConfigModule } from '../../config/app-config.module';
 import { AppConfigService } from '../../config/app-config.service';
+import { QueueDiagnosticsService } from './queue-diagnostics.service';
 import { QueueProducerService } from './queue.producer.service';
 import { VIDEO_QUEUE_NAME } from './queue-name';
 import { RedisService } from './redis.service';
@@ -27,7 +28,12 @@ import { RedisService } from './redis.service';
       }),
     }),
   ],
-  providers: [QueueProducerService, RedisService],
-  exports: [BullModule, QueueProducerService, RedisService],
+  providers: [QueueDiagnosticsService, QueueProducerService, RedisService],
+  exports: [
+    BullModule,
+    QueueDiagnosticsService,
+    QueueProducerService,
+    RedisService,
+  ],
 })
 export class QueueModule {}

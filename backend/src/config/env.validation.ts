@@ -38,6 +38,6 @@ export const envValidationSchema = Joi.object({
   R2_ACCESS_KEY_ID: Joi.string().required(),
   R2_SECRET_ACCESS_KEY: Joi.string().required(),
 
-  YTDLP_BINARY_PATH: Joi.string().optional(),
-  FFMPEG_BINARY_PATH: Joi.string().optional(),
+  YTDLP_BINARY_PATH: Joi.string().allow('').optional(),
+  FFMPEG_BINARY_PATH: Joi.string().allow('').optional(),
 });

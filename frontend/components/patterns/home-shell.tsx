@@ -49,6 +49,10 @@ export function HomeShell() {
   const statusError = jobFlow.statusError
     ? getErrorMessage(jobFlow.statusError)
     : null;
+  const healthChecks = healthQuery.data?.checks;
+  const mediaToolsReady =
+    healthChecks?.ytDlp.status === "up" &&
+    healthChecks?.ffmpeg.status === "up";
 
   const jobItems = jobFlow.jobItems;
 
@@ -161,10 +165,10 @@ export function HomeShell() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
               <span className="text-[length:var(--text-body-sm)] text-[var(--foreground-muted)]">
-                API
+                Runtime
               </span>
               <Badge variant={healthBadgeVariant}>
-                {healthQuery.data?.checks.postgres.status === "up"
+                {healthQuery.data?.status === "ok"
                   ? "Operational"
                   : "Degraded"}
               </Badge>
@@ -175,28 +179,52 @@ export function HomeShell() {
               </span>
               <Badge
                 variant={
-                  healthQuery.data?.checks.queue.status === "up"
+                  healthChecks?.queue.status === "up"
                     ? "processing"
                     : "failed"
                 }
               >
-                {healthQuery.data?.checks.queue.status === "up"
-                  ? "Active"
+                {healthChecks?.queue.status === "up"
+                  ? "Reachable"
                   : "Unavailable"}
               </Badge>
             </div>
             <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
               <span className="text-[length:var(--text-body-sm)] text-[var(--foreground-muted)]">
-                Storage
+                Worker
               </span>
               <Badge
                 variant={
-                  healthQuery.data?.checks.redis.status === "up"
+                  healthChecks?.worker.status === "up"
+                    ? "processing"
+                    : "failed"
+                }
+              >
+                {healthChecks?.worker.status === "up"
+                  ? "Connected"
+                  : "Unavailable"}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
+              <span className="text-[length:var(--text-body-sm)] text-[var(--foreground-muted)]">
+                Media Tools
+              </span>
+              <Badge variant={mediaToolsReady ? "ready" : "failed"}>
+                {mediaToolsReady ? "Ready" : "Unavailable"}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] px-3 py-2">
+              <span className="text-[length:var(--text-body-sm)] text-[var(--foreground-muted)]">
+                Redis
+              </span>
+              <Badge
+                variant={
+                  healthChecks?.redis.status === "up"
                     ? "queued"
                     : "failed"
                 }
               >
-                {healthQuery.data?.checks.redis.status === "up"
+                {healthChecks?.redis.status === "up"
                   ? "Connected"
                   : "Unavailable"}
               </Badge>

@@ -7,15 +7,19 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir yt-dlp
+RUN python3 -m pip install --no-cache-dir --break-system-packages yt-dlp
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN npm run build
+RUN pnpm run build && pnpm run runtime:check:binaries
 
-CMD ["node", "dist/main.js"]
+ENV NODE_ENV=production
+
+CMD ["pnpm", "run", "runtime:api"]

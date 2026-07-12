@@ -26,18 +26,4 @@ export class QueueProducerService {
 
     return job.id as string;
   }
-
-  async getQueueMetrics(): Promise<{
-    waiting: number;
-    active: number;
-    failed: number;
-  }> {
-    const [waiting, active, failed] = await Promise.all([
-      this.queue.getWaitingCount(),
-      this.queue.getActiveCount(),
-      this.queue.getFailedCount(),
-    ]);
-
-    return { waiting, active, failed };
-  }
 }
