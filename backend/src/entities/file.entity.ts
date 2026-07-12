@@ -43,6 +43,9 @@ export class FileEntity {
   @Column({ type: 'varchar', length: 64 })
   sessionId!: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  profileId!: string | null;
+
   @ManyToOne(() => SessionEntity, (session) => session.files, {
     onDelete: 'RESTRICT',
   })

@@ -45,6 +45,7 @@ describe('VideoService', () => {
 
   const ytDlpService = {
     getMetadata: jest.fn(),
+    getFormatSize: jest.fn(),
   };
 
   const config = {
@@ -116,6 +117,41 @@ describe('VideoService', () => {
     expect(sessionService.reserveSessionBytes).not.toHaveBeenCalled();
   });
 
+  it('stores selected profile when queued by global storage limit', async () => {
+    const service = createService();
+
+    sessionService.incrementSessionJobs.mockResolvedValue(1);
+    ytDlpService.getFormatSize.mockResolvedValue(1000);
+    sessionService.getSessionBytes.mockResolvedValue(0);
+    redisService.getNumber.mockResolvedValue(5000);
+    config.maxStorageBytes = 4500;
+
+    fileRepository.create.mockImplementation((value) => value);
+    fileRepository.save.mockResolvedValue({
+      id: 'file-queued-1',
+      key: 'pending/key',
+      sourceUrl: 'https://example.com/video',
+      size: '1000',
+      status: FileStatus.QUEUED,
+      sessionId: 'session-1',
+      profileId: '18',
+    });
+
+    await service.submitDownload(
+      'https://example.com/video',
+      'session-1',
+      '18',
+    );
+
+    expect(fileRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: FileStatus.QUEUED,
+        profileId: '18',
+      }),
+    );
+    expect(queueProducer.enqueueDownloadJob).not.toHaveBeenCalled();
+  });
+
   it('falls back to DB usage when redis session bytes are stale high', async () => {
     const service = createService();
 
@@ -160,6 +196,58 @@ describe('VideoService', () => {
 
     expect(result.status).toBe(FileStatus.PROCESSING);
     expect(sessionService.setSessionBytes).toHaveBeenCalledWith('session-1', 0);
+  });
+
+  it('persists selected profile and enqueues it for processing', async () => {
+    const service = createService();
+
+    sessionService.incrementSessionJobs.mockResolvedValue(1);
+    ytDlpService.getFormatSize.mockResolvedValue(1000);
+    sessionService.getSessionBytes.mockResolvedValue(0);
+    redisService.getNumber.mockResolvedValue(0);
+    redisService.incrementBy.mockResolvedValue(1000);
+    sessionService.reserveSessionBytes.mockResolvedValue(1000);
+
+    fileRepository.create.mockImplementation((value) => value);
+    fileRepository.save
+      .mockResolvedValueOnce({
+        id: 'file-processing-1',
+        key: 'pending/key',
+        sourceUrl: 'https://example.com/video',
+        size: '1000',
+        status: FileStatus.PROCESSING,
+        sessionId: 'session-1',
+        profileId: '18',
+      })
+      .mockResolvedValueOnce({
+        id: 'file-processing-1',
+        key: 'pending/key',
+        sourceUrl: 'https://example.com/video',
+        size: '1000',
+        status: FileStatus.PROCESSING,
+        sessionId: 'session-1',
+        profileId: '18',
+        queueJobId: 'job-1',
+      });
+    queueProducer.enqueueDownloadJob.mockResolvedValue('job-1');
+
+    await service.submitDownload(
+      'https://example.com/video',
+      'session-1',
+      '18',
+    );
+
+    expect(fileRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: FileStatus.PROCESSING,
+        profileId: '18',
+      }),
+    );
+    expect(queueProducer.enqueueDownloadJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileId: '18',
+      }),
+    );
   });
 
   it('throws bad request when estimated size exceeds per-session quota', async () => {
@@ -280,5 +368,35 @@ describe('VideoService', () => {
     await expect(
       service.getDownloadUrl('file-1', 'session-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('promotes queued files with stored selected profile', async () => {
+    const service = createService();
+
+    fileRepository.find.mockResolvedValue([
+      {
+        id: 'file-queued-1',
+        sourceUrl: 'https://example.com/video',
+        size: '1000',
+        sessionId: 'session-1',
+        profileId: '18',
+      },
+    ]);
+    sessionService.getSessionBytes.mockResolvedValue(0);
+    redisService.getNumber.mockResolvedValue(0);
+    sessionService.reserveSessionBytes.mockResolvedValue(1000);
+    redisService.incrementBy.mockResolvedValue(1000);
+    queueProducer.enqueueDownloadJob.mockResolvedValue('job-1');
+    fileRepository.update.mockResolvedValue({ affected: 1 });
+
+    const promoted = await service.promoteQueuedFiles();
+
+    expect(promoted).toBe(1);
+    expect(queueProducer.enqueueDownloadJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileId: 'file-queued-1',
+        profileId: '18',
+      }),
+    );
   });
 });

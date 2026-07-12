@@ -6,7 +6,7 @@ import type {
   VideoFile,
 } from "@/types";
 
-const createJobInFlightByUrl = new Map<
+const createJobInFlightByRequest = new Map<
   string,
   Promise<VideoJobCreateResponse>
 >();
@@ -55,7 +55,12 @@ function toTitle(sourceUrl: string): string {
 export const videoService = {
   createJob(payload: VideoJobCreateRequest): Promise<VideoJobCreateResponse> {
     const normalizedUrl = normalizeSourceUrl(payload.url);
-    const inFlight = createJobInFlightByUrl.get(normalizedUrl);
+    const normalizedPayload: VideoJobCreateRequest = {
+      url: normalizedUrl,
+      profileId: payload.profileId,
+    };
+    const requestKey = `${normalizedPayload.url}::${normalizedPayload.profileId ?? "default"}`;
+    const inFlight = createJobInFlightByRequest.get(requestKey);
     if (inFlight) {
       return inFlight;
     }
@@ -68,15 +73,15 @@ export const videoService = {
     activeCreateController = controller;
 
     const requestPromise = videoApi
-      .createJob({ url: normalizedUrl }, { signal: controller.signal })
+      .createJob(normalizedPayload, { signal: controller.signal })
       .finally(() => {
-        createJobInFlightByUrl.delete(normalizedUrl);
+        createJobInFlightByRequest.delete(requestKey);
         if (activeCreateController === controller) {
           activeCreateController = null;
         }
       });
 
-    createJobInFlightByUrl.set(normalizedUrl, requestPromise);
+    createJobInFlightByRequest.set(requestKey, requestPromise);
     return requestPromise;
   },
 

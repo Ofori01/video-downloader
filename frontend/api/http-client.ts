@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const DEFAULT_API_BASE_URL = "/api";
+const DEFAULT_API_BASE_URL = "http://localhost:3000";
 
 function getBaseUrl(): string {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();

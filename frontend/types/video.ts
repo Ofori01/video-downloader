@@ -35,6 +35,7 @@ export interface VideoFile {
   size: string | null;
   status: FileStatus;
   sessionId: string;
+  profileId: string | null;
   createdAt: string;
   downloadedAt: string | null;
   expiresAt: string | null;

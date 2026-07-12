@@ -30,6 +30,7 @@ export function useCreateVideoJob() {
         size: String(data.estimatedSize),
         status: data.status,
         sessionId: "current-session",
+        profileId: variables.profileId ?? null,
         createdAt: new Date().toISOString(),
         downloadedAt: null,
         expiresAt: null,

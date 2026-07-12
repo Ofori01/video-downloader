@@ -20,7 +20,9 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3001](http://localhost:3001) with your browser to see
+the result. Keep the Nest backend running on port `3000` so browser requests can
+reach `NEXT_PUBLIC_API_BASE_URL`.
 
 ## Frontend Data Architecture
 
@@ -45,18 +47,10 @@ This frontend follows a standardized layered approach:
 
 ### Environment
 
-- Browser requests default to same-origin `/api` via Next Route Handlers
-- `NEXT_PUBLIC_API_BASE_URL` is optional and defaults to `/api`
-- Native Next API runtime uses server-side env vars for Postgres, Redis, queue, and R2 integrations
+- `NEXT_PUBLIC_API_BASE_URL` controls the Nest backend base URL for browser requests
+- The local default is `http://localhost:3000`
 - Requests are made with credentials enabled for session cookie support
-
-### Migration status
-
-- `GET /api/system/health` is implemented natively in Next.js server runtime (no Nest proxy)
-- `POST /api/video/jobs` is implemented natively in Next.js server runtime (no Nest proxy)
-- `GET /api/video/files/:id` is implemented natively in Next.js server runtime (no Nest proxy)
-- `GET /api/download/:id` is implemented natively in Next.js server runtime (no Nest proxy)
-- `GET /api/video/profiles` is implemented natively in Next.js server runtime (no Nest proxy)
+- The Nest backend owns video job intake, worker processing, storage, cleanup, sessions, quotas, migrations, and operational health
 
 ## UI Foundation
 

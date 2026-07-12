@@ -130,6 +130,7 @@ export class VideoService {
         size: String(estimatedSize),
         status: QUEUED_STATUS,
         sessionId,
+        profileId: profileId ?? null,
       });
 
       const saved = await this.fileRepository.save(queued);
@@ -153,6 +154,7 @@ export class VideoService {
         size: String(estimatedSize),
         status: FileStatus.PROCESSING,
         sessionId,
+        profileId: profileId ?? null,
       });
 
       const saved = await this.fileRepository.save(file);
@@ -348,6 +350,7 @@ export class VideoService {
           url: file.sourceUrl,
           sessionId: file.sessionId,
           reservedBytes: estimatedSize,
+          profileId: file.profileId ?? undefined,
         });
 
         const result = await this.fileRepository.update(
