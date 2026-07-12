@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Download,
@@ -11,9 +11,7 @@ import {
 
 import { getErrorMessage } from "@/api/error";
 import { useHealthStatus } from "@/hooks/use-health-status";
-import { useAvailableProfiles } from "@/hooks/use-available-profiles";
-import { useCreateVideoJob, useVideoJobStatuses } from "@/hooks/use-video-jobs";
-import { normalizeSourceUrl, videoService } from "@/services/video.service";
+import { useClientJobFlow } from "@/modules/client-job-flow";
 import type { FileStatus } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +33,7 @@ const STATUS_LABEL: Record<FileStatus, string> = {
   deleted: "Deleted",
 };
 
-const STATUS_ICON: Record<FileStatus, React.ReactNode> = {
+const STATUS_ICON: Record<FileStatus, ReactNode> = {
   queued: <Hourglass className="size-4" aria-hidden="true" />,
   processing: (
     <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
@@ -45,128 +43,14 @@ const STATUS_ICON: Record<FileStatus, React.ReactNode> = {
   deleted: <ArrowRight className="size-4" aria-hidden="true" />,
 };
 
-const JOB_IDS_STORAGE_KEY = "video-downloader:job-file-ids";
-const JOB_IDS_STORAGE_EVENT = "video-downloader:job-file-ids-change";
-const MAX_STORED_JOB_IDS = 100;
-const EMPTY_JOB_IDS: string[] = [];
-
-let cachedJobIdsRaw: string | null | undefined;
-let cachedJobIdsSnapshot: string[] = EMPTY_JOB_IDS;
-
-function parseStoredJobIds(raw: string | null): string[] {
-  if (!raw) {
-    return EMPTY_JOB_IDS;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return EMPTY_JOB_IDS;
-    }
-
-    return parsed
-      .filter((item): item is string => typeof item === "string")
-      .slice(0, MAX_STORED_JOB_IDS);
-  } catch {
-    return EMPTY_JOB_IDS;
-  }
-}
-
-function readStoredJobIds(): string[] {
-  if (typeof window === "undefined") {
-    return EMPTY_JOB_IDS;
-  }
-
-  const raw = window.localStorage.getItem(JOB_IDS_STORAGE_KEY);
-  if (raw === cachedJobIdsRaw) {
-    return cachedJobIdsSnapshot;
-  }
-
-  cachedJobIdsRaw = raw;
-  cachedJobIdsSnapshot = parseStoredJobIds(raw);
-  return cachedJobIdsSnapshot;
-}
-
-function saveStoredJobIds(fileIds: string[]): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const nextSnapshot = fileIds.slice(0, MAX_STORED_JOB_IDS);
-  const nextRaw = JSON.stringify(nextSnapshot);
-  if (nextRaw === cachedJobIdsRaw) {
-    return;
-  }
-
-  cachedJobIdsRaw = nextRaw;
-  cachedJobIdsSnapshot = nextSnapshot;
-  window.localStorage.setItem(JOB_IDS_STORAGE_KEY, nextRaw);
-
-  window.dispatchEvent(new Event(JOB_IDS_STORAGE_EVENT));
-}
-
-function subscribeStoredJobIds(onStoreChange: () => void): () => void {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === null || event.key === JOB_IDS_STORAGE_KEY) {
-      onStoreChange();
-    }
-  };
-
-  window.addEventListener("storage", handleStorage);
-  window.addEventListener(JOB_IDS_STORAGE_EVENT, onStoreChange);
-
-  return () => {
-    window.removeEventListener("storage", handleStorage);
-    window.removeEventListener(JOB_IDS_STORAGE_EVENT, onStoreChange);
-  };
-}
-
-function getStoredJobIdsServerSnapshot(): string[] {
-  return EMPTY_JOB_IDS;
-}
-
 export function HomeShell() {
-  const [url, setUrl] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
-    null,
-  );
-  const fileIds = useSyncExternalStore(
-    subscribeStoredJobIds,
-    readStoredJobIds,
-    getStoredJobIdsServerSnapshot,
-  );
-
+  const jobFlow = useClientJobFlow();
   const healthQuery = useHealthStatus();
-  const createJobMutation = useCreateVideoJob();
-  const jobStatuses = useVideoJobStatuses(fileIds);
-  const normalizedUrl = useMemo(() => normalizeSourceUrl(url), [url]);
-
-  const isValid = useMemo(() => {
-    if (!normalizedUrl) {
-      return false;
-    }
-
-    try {
-      const parsed = new URL(normalizedUrl);
-      return ["http:", "https:"].includes(parsed.protocol);
-    } catch {
-      return false;
-    }
-  }, [normalizedUrl]);
-
-  // Profile discovery query
-  const profilesQuery = useAvailableProfiles(isValid ? normalizedUrl : null);
-
-  const statusError = jobStatuses.firstError
-    ? getErrorMessage(jobStatuses.firstError)
+  const statusError = jobFlow.statusError
+    ? getErrorMessage(jobFlow.statusError)
     : null;
 
-  const jobItems = jobStatuses.items.map(videoService.toJobViewModel);
+  const jobItems = jobFlow.jobItems;
 
   const healthBadgeVariant =
     healthQuery.data?.status === "ok" ? "ready" : "queued";
@@ -192,26 +76,7 @@ export function HomeShell() {
               className="space-y-3"
               onSubmit={async (event) => {
                 event.preventDefault();
-                setSubmitted(true);
-
-                if (!isValid || !selectedProfileId) {
-                  return;
-                }
-
-                try {
-                  const result = await createJobMutation.mutateAsync({
-                    url: normalizedUrl,
-                    profileId: selectedProfileId,
-                  });
-                  const deduped = fileIds.filter((id) => id !== result.fileId);
-                  saveStoredJobIds(
-                    [result.fileId, ...deduped].slice(0, MAX_STORED_JOB_IDS),
-                  );
-                  setUrl("");
-                  setSelectedProfileId(null);
-                } catch {
-                  // Error is surfaced through mutation state.
-                }
+                await jobFlow.submit();
               }}
             >
               <label
@@ -227,27 +92,21 @@ export function HomeShell() {
                     type="url"
                     inputMode="url"
                     autoComplete="off"
-                    value={url}
-                    onChange={(event) => setUrl(event.target.value)}
+                    value={jobFlow.url}
+                    onChange={(event) => jobFlow.setUrl(event.target.value)}
                     placeholder="https://example.com/video"
-                    aria-invalid={submitted && !isValid}
+                    aria-invalid={jobFlow.submitted && !jobFlow.isUrlValid}
                     aria-describedby="video-url-help"
                   />
                 </div>
                 <Button
                   type="submit"
                   size="lg"
-                  disabled={
-                    !isValid ||
-                    !selectedProfileId ||
-                    createJobMutation.isPending
-                  }
+                  disabled={!jobFlow.canSubmit}
                   className="sm:w-auto"
                   suppressHydrationWarning
                 >
-                  {createJobMutation.isPending
-                    ? "Submitting..."
-                    : "Start Download"}
+                  {jobFlow.isSubmitting ? "Submitting..." : "Start Download"}
                 </Button>
               </div>
               <p
@@ -257,7 +116,7 @@ export function HomeShell() {
                 Supports public video links. Maximum file size and session
                 limits apply.
               </p>
-              {submitted && !isValid ? (
+              {jobFlow.submitted && !jobFlow.isUrlValid ? (
                 <p
                   role="alert"
                   className="rounded-[var(--radius-md)] border border-rose-200 bg-rose-50 px-3 py-2 text-[length:var(--text-body-sm)] text-rose-700 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
@@ -265,18 +124,20 @@ export function HomeShell() {
                   Enter a valid URL starting with http:// or https://.
                 </p>
               ) : null}
-              {isValid && (
+              {jobFlow.isUrlValid && (
                 <div className="rounded-[var(--radius-md)] border border-[var(--border)] p-4">
                   <ProfileSelector
-                    profiles={profilesQuery.data ?? []}
-                    selectedProfileId={selectedProfileId}
-                    onSelectProfile={setSelectedProfileId}
-                    isLoading={profilesQuery.isLoading}
-                    error={profilesQuery.error}
+                    profiles={jobFlow.profileOptions}
+                    selectedProfileId={jobFlow.selectedProfileId}
+                    onSelectProfile={jobFlow.selectProfile}
+                    isLoading={jobFlow.isLoadingProfiles}
+                    error={jobFlow.profileError}
                   />
                 </div>
               )}
-              {submitted && !selectedProfileId && isValid ? (
+              {jobFlow.submitted &&
+              !jobFlow.selectedProfileId &&
+              jobFlow.isUrlValid ? (
                 <p
                   role="alert"
                   className="rounded-[var(--radius-md)] border border-amber-200 bg-amber-50 px-3 py-2 text-[length:var(--text-body-sm)] text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
@@ -407,7 +268,7 @@ export function HomeShell() {
                           size="sm"
                           onClick={() =>
                             window.open(
-                              videoService.getDownloadUrl(job.id),
+                              jobFlow.getDownloadUrl(job.id),
                               "_blank",
                               "noopener,noreferrer",
                             )
@@ -422,7 +283,7 @@ export function HomeShell() {
                 ))}
               </ul>
             )}
-            {jobStatuses.isFetching ? (
+            {jobFlow.isFetchingStatuses ? (
               <p className="mt-3 text-[length:var(--text-caption)] text-[var(--foreground-muted)]">
                 Syncing latest statuses...
               </p>

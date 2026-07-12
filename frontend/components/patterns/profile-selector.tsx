@@ -1,6 +1,5 @@
 "use client";
 
-import React, { useMemo } from "react";
 import type { AvailableProfile } from "@/types";
 
 interface ProfileSelectorProps {
@@ -26,31 +25,6 @@ export function ProfileSelector({
   isLoading,
   error,
 }: ProfileSelectorProps) {
-  const sortedProfiles = useMemo(() => {
-    // Sort: merged (highest res) first, then video-only (highest res), then audio-only
-    const merged = profiles.filter(
-      (p) => !p.isAudioOnly && p.audioCodec !== undefined
-    );
-    const videoOnly = profiles.filter(
-      (p) => !p.isAudioOnly && p.audioCodec === undefined
-    );
-    const audioOnly = profiles.filter((p) => p.isAudioOnly);
-
-    return [
-      ...merged.sort((a, b) => {
-        const aRes = parseInt(a.resolution || "0") || 0;
-        const bRes = parseInt(b.resolution || "0") || 0;
-        return bRes - aRes;
-      }),
-      ...videoOnly.sort((a, b) => {
-        const aRes = parseInt(a.resolution || "0") || 0;
-        const bRes = parseInt(b.resolution || "0") || 0;
-        return bRes - aRes;
-      }),
-      ...audioOnly,
-    ];
-  }, [profiles]);
-
   if (error) {
     return (
       <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -72,7 +46,7 @@ export function ProfileSelector({
     );
   }
 
-  if (sortedProfiles.length === 0) {
+  if (profiles.length === 0) {
     return (
       <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600">
         No profiles available for this URL
@@ -86,7 +60,7 @@ export function ProfileSelector({
         Select download quality:
       </p>
       <div className="space-y-2">
-        {sortedProfiles.map((profile) => (
+        {profiles.map((profile) => (
           <label
             key={profile.id}
             className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 transition-colors hover:bg-blue-50"
