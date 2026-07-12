@@ -85,12 +85,41 @@ export class DownloadFileStore {
     });
   }
 
+  async failProcessingDownload(
+    fileId: string,
+    reason: string,
+  ): Promise<boolean> {
+    const result = await this.fileRepository.update(
+      { id: fileId, status: FileStatus.PROCESSING },
+      {
+        status: FileStatus.FAILED,
+        queueJobId: null,
+        errorReason: reason,
+      },
+    );
+
+    return (result.affected ?? 0) > 0;
+  }
+
   async findExpiredReadyFiles(now = new Date()): Promise<FileEntity[]> {
     return this.fileRepository
       .createQueryBuilder('file')
       .where('file.status = :status', { status: FileStatus.READY })
       .andWhere('file.expiresAt IS NOT NULL')
       .andWhere('file.expiresAt <= :now', { now })
+      .getMany();
+  }
+
+  async findStaleProcessingDownloads(
+    updatedBefore: Date,
+    limit: number,
+  ): Promise<FileEntity[]> {
+    return this.fileRepository
+      .createQueryBuilder('file')
+      .where('file.status = :status', { status: FileStatus.PROCESSING })
+      .andWhere('file.updatedAt <= :updatedBefore', { updatedBefore })
+      .orderBy('file.updatedAt', 'ASC')
+      .take(limit)
       .getMany();
   }
 
@@ -125,6 +154,18 @@ export class DownloadFileStore {
       .getRawOne<{ total: string }>();
 
     return Number(raw?.total ?? 0);
+  }
+
+  async getActiveReservationSessionIds(): Promise<string[]> {
+    const rows = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('DISTINCT file.sessionId', 'sessionId')
+      .where('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .getRawMany<{ sessionId: string }>();
+
+    return rows.map((row) => row.sessionId);
   }
 
   async findQueuedDownloads(limit: number): Promise<FileEntity[]> {

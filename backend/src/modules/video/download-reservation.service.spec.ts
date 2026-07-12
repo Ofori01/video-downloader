@@ -11,15 +11,14 @@ describe('DownloadReservationService', () => {
   const fileStore = {
     getActiveSessionBytes: jest.fn(),
     getActiveStorageBytes: jest.fn(),
+    getActiveReservationSessionIds: jest.fn(),
   };
 
   const redisService = {
     getNumber: jest.fn(),
     incrementBy: jest.fn(),
     decrementBy: jest.fn(),
-    raw: {
-      set: jest.fn(),
-    },
+    setNumber: jest.fn(),
   };
 
   const sessionService = {
@@ -42,6 +41,7 @@ describe('DownloadReservationService', () => {
     config.maxStorageBytes = 10_000_000_000;
     sessionService.getSessionBytes.mockResolvedValue(0);
     redisService.getNumber.mockResolvedValue(0);
+    fileStore.getActiveReservationSessionIds.mockResolvedValue([]);
   });
 
   it('returns process when session and global capacity are available', async () => {
@@ -143,9 +143,64 @@ describe('DownloadReservationService', () => {
 
     await expect(service.reconcileStorageUsageFromDb()).resolves.toBe(12345);
 
-    expect(redisService.raw.set).toHaveBeenCalledWith(
+    expect(redisService.setNumber).toHaveBeenCalledWith(
       STORAGE_USED_KEY,
-      '12345',
+      12345,
+    );
+  });
+
+  it('reconciles a session reservation counter from the database', async () => {
+    const service = createService();
+    fileStore.getActiveSessionBytes.mockResolvedValue(2500);
+
+    await expect(
+      service.reconcileSessionUsageFromDb('session-1'),
+    ).resolves.toEqual({
+      sessionId: 'session-1',
+      bytes: 2500,
+    });
+
+    expect(sessionService.setSessionBytes).toHaveBeenCalledWith(
+      'session-1',
+      2500,
+    );
+  });
+
+  it('reconciles storage and active session reservations from the database', async () => {
+    const service = createService();
+    fileStore.getActiveStorageBytes.mockResolvedValue(7000);
+    fileStore.getActiveReservationSessionIds.mockResolvedValue([
+      'session-1',
+      'session-2',
+    ]);
+    fileStore.getActiveSessionBytes
+      .mockResolvedValueOnce(1000)
+      .mockResolvedValueOnce(2000)
+      .mockResolvedValueOnce(0);
+
+    await expect(
+      service.reconcileActiveReservationsFromDb(['session-2', 'stale-session']),
+    ).resolves.toEqual({
+      storageBytes: 7000,
+      sessions: [
+        { sessionId: 'session-1', bytes: 1000 },
+        { sessionId: 'session-2', bytes: 2000 },
+        { sessionId: 'stale-session', bytes: 0 },
+      ],
+    });
+
+    expect(redisService.setNumber).toHaveBeenCalledWith(STORAGE_USED_KEY, 7000);
+    expect(sessionService.setSessionBytes).toHaveBeenCalledWith(
+      'session-1',
+      1000,
+    );
+    expect(sessionService.setSessionBytes).toHaveBeenCalledWith(
+      'session-2',
+      2000,
+    );
+    expect(sessionService.setSessionBytes).toHaveBeenCalledWith(
+      'stale-session',
+      0,
     );
   });
 });

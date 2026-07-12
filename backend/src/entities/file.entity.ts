@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { SessionEntity } from './session.entity';
 
@@ -55,6 +56,10 @@ export class FileEntity {
   @Index('idx_files_created_at')
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
+
+  @Index('idx_files_updated_at')
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt!: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
   downloadedAt!: Date | null;

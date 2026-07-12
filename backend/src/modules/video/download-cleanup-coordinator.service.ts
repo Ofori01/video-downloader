@@ -2,11 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { StorageService } from '../storage/storage.service';
 import { DownloadFileStore } from './download-file-store.service';
 import { DownloadReservationService } from './download-reservation.service';
-import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
 
-export interface DownloadCleanupSummary {
+export interface ExpiredDownloadCleanupSummary {
   deleted: number;
-  promoted: number;
+  releasedBytes: number;
+  sessionIds: string[];
 }
 
 @Injectable()
@@ -15,14 +15,15 @@ export class DownloadCleanupCoordinator {
 
   constructor(
     private readonly fileStore: DownloadFileStore,
-    private readonly promotionService: QueuedDownloadPromotionService,
     private readonly reservationService: DownloadReservationService,
     private readonly storageService: StorageService,
   ) {}
 
-  async cleanupExpiredFiles(): Promise<DownloadCleanupSummary> {
+  async cleanupExpiredFiles(): Promise<ExpiredDownloadCleanupSummary> {
     const expiredFiles = await this.fileStore.findExpiredReadyFiles();
     let deleted = 0;
+    let releasedBytes = 0;
+    const sessionIds = new Set<string>();
 
     for (const file of expiredFiles) {
       try {
@@ -31,10 +32,10 @@ export class DownloadCleanupCoordinator {
         deleted += 1;
 
         if (file.size) {
-          await this.reservationService.release(
-            file.sessionId,
-            Number(file.size),
-          );
+          const size = Number(file.size);
+          await this.reservationService.release(file.sessionId, size);
+          releasedBytes += Number.isFinite(size) ? Math.max(0, size) : 0;
+          sessionIds.add(file.sessionId);
         }
       } catch (error) {
         this.logger.error(
@@ -43,10 +44,7 @@ export class DownloadCleanupCoordinator {
       }
     }
 
-    await this.reservationService.reconcileStorageUsageFromDb();
-    const promoted = await this.promotionService.promoteQueuedFiles();
-
-    return { deleted, promoted };
+    return { deleted, releasedBytes, sessionIds: [...sessionIds] };
   }
 
   private formatError(error: unknown): string {

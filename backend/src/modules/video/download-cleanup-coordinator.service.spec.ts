@@ -6,13 +6,8 @@ describe('DownloadCleanupCoordinator', () => {
     markDeleted: jest.fn(),
   };
 
-  const promotionService = {
-    promoteQueuedFiles: jest.fn(),
-  };
-
   const reservationService = {
     release: jest.fn(),
-    reconcileStorageUsageFromDb: jest.fn(),
   };
 
   const storageService = {
@@ -22,21 +17,18 @@ describe('DownloadCleanupCoordinator', () => {
   const createService = () =>
     new DownloadCleanupCoordinator(
       fileStore as never,
-      promotionService as never,
       reservationService as never,
       storageService as never,
     );
 
   beforeEach(() => {
     jest.clearAllMocks();
-    promotionService.promoteQueuedFiles.mockResolvedValue(2);
     reservationService.release.mockResolvedValue(undefined);
-    reservationService.reconcileStorageUsageFromDb.mockResolvedValue(0);
     storageService.deleteObject.mockResolvedValue(undefined);
     fileStore.markDeleted.mockResolvedValue(undefined);
   });
 
-  it('deletes expired files, releases reservations, reconciles storage, and promotes queued work', async () => {
+  it('deletes expired files and releases reservations', async () => {
     const service = createService();
     fileStore.findExpiredReadyFiles.mockResolvedValue([
       {
@@ -49,7 +41,8 @@ describe('DownloadCleanupCoordinator', () => {
 
     await expect(service.cleanupExpiredFiles()).resolves.toEqual({
       deleted: 1,
-      promoted: 2,
+      releasedBytes: 1000,
+      sessionIds: ['session-1'],
     });
 
     expect(storageService.deleteObject).toHaveBeenCalledWith(
@@ -57,7 +50,5 @@ describe('DownloadCleanupCoordinator', () => {
     );
     expect(fileStore.markDeleted).toHaveBeenCalledWith('file-1');
     expect(reservationService.release).toHaveBeenCalledWith('session-1', 1000);
-    expect(reservationService.reconcileStorageUsageFromDb).toHaveBeenCalled();
-    expect(promotionService.promoteQueuedFiles).toHaveBeenCalled();
   });
 });

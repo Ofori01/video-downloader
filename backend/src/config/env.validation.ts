@@ -25,6 +25,10 @@ export const envValidationSchema = Joi.object({
 
   FILE_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(3600),
   SIGNED_URL_TTL_SECONDS: Joi.number().integer().min(60).default(900),
+  PROCESSING_STALE_AFTER_SECONDS: Joi.number()
+    .integer()
+    .min(600)
+    .default(21600),
 
   ENABLE_NEW_REQUESTS: Joi.boolean().default(true),
 

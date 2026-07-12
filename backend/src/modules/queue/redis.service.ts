@@ -31,7 +31,23 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async decrementBy(key: string, by: number): Promise<number> {
-    return this.client.decrby(key, by);
+    const result = await this.client.eval(
+      `
+      local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+      local decrement = tonumber(ARGV[1])
+      local next_value = current - decrement
+      if next_value < 0 then
+        next_value = 0
+      end
+      redis.call('SET', KEYS[1], tostring(next_value))
+      return next_value
+      `,
+      1,
+      key,
+      String(Math.max(0, Math.trunc(by))),
+    );
+
+    return Number(result);
   }
 
   async incrementWithWindow(

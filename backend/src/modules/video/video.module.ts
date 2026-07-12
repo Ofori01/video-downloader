@@ -10,6 +10,8 @@ import { DownloadFormatResolver } from './download-format-resolver.service';
 import { DownloadFileAccessService } from './download-file-access.service';
 import { DownloadFileStore } from './download-file-store.service';
 import { DownloadIntakeService } from './download-intake.service';
+import { DownloadProcessingRecoveryService } from './download-processing-recovery.service';
+import { DownloadReservationMaintenanceService } from './download-reservation-maintenance.service';
 import { DownloadReservationService } from './download-reservation.service';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
@@ -37,6 +39,8 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     DownloadFileAccessService,
     DownloadFileStore,
     DownloadIntakeService,
+    DownloadProcessingRecoveryService,
+    DownloadReservationMaintenanceService,
     DownloadReservationService,
     DownloadSizeEstimator,
     DownloadWorkerLifecycleService,
@@ -52,6 +56,7 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     DownloadCleanupCoordinator,
     DownloadFileAccessService,
     DownloadIntakeService,
+    DownloadReservationMaintenanceService,
     DownloadWorkerLifecycleService,
   ],
 })

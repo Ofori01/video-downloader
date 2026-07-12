@@ -73,6 +73,10 @@ export class AppConfigService {
     return this.getNumber('SIGNED_URL_TTL_SECONDS');
   }
 
+  get processingStaleAfterSeconds(): number {
+    return this.getNumber('PROCESSING_STALE_AFTER_SECONDS');
+  }
+
   get enableNewRequests(): boolean {
     return this.getBoolean('ENABLE_NEW_REQUESTS');
   }

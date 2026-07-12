@@ -18,6 +18,16 @@ export type DownloadAdmissionDecision =
       message: string;
     };
 
+export interface SessionReservationReconciliation {
+  sessionId: string;
+  bytes: number;
+}
+
+export interface ReservationReconciliationSummary {
+  storageBytes: number;
+  sessions: SessionReservationReconciliation[];
+}
+
 @Injectable()
 export class DownloadReservationService {
   constructor(
@@ -128,8 +138,35 @@ export class DownloadReservationService {
 
   async reconcileStorageUsageFromDb(): Promise<number> {
     const total = await this.fileStore.getActiveStorageBytes();
-    await this.redisService.raw.set(STORAGE_USED_KEY, String(total));
+    await this.redisService.setNumber(STORAGE_USED_KEY, total);
     return total;
+  }
+
+  async reconcileSessionUsageFromDb(
+    sessionId: string,
+  ): Promise<SessionReservationReconciliation> {
+    const bytes = await this.fileStore.getActiveSessionBytes(sessionId);
+    await this.sessionService.setSessionBytes(sessionId, bytes);
+    return { sessionId, bytes };
+  }
+
+  async reconcileActiveReservationsFromDb(
+    additionalSessionIds: string[] = [],
+  ): Promise<ReservationReconciliationSummary> {
+    const storageBytes = await this.reconcileStorageUsageFromDb();
+    const activeSessionIds =
+      await this.fileStore.getActiveReservationSessionIds();
+    const sessionIds = [
+      ...new Set([...activeSessionIds, ...additionalSessionIds]),
+    ];
+
+    const sessions = await Promise.all(
+      sessionIds.map((sessionId) =>
+        this.reconcileSessionUsageFromDb(sessionId),
+      ),
+    );
+
+    return { storageBytes, sessions };
   }
 
   private async reconcileSessionBytesIfStale(

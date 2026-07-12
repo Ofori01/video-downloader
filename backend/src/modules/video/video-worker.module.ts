@@ -8,6 +8,8 @@ import { StorageModule } from '../storage/storage.module';
 import { DownloadFormatResolver } from './download-format-resolver.service';
 import { DownloadCleanupCoordinator } from './download-cleanup-coordinator.service';
 import { DownloadFileStore } from './download-file-store.service';
+import { DownloadProcessingRecoveryService } from './download-processing-recovery.service';
+import { DownloadReservationMaintenanceService } from './download-reservation-maintenance.service';
 import { DownloadReservationService } from './download-reservation.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
 import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
@@ -27,6 +29,8 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     DownloadCleanupCoordinator,
     DownloadFormatResolver,
     DownloadFileStore,
+    DownloadProcessingRecoveryService,
+    DownloadReservationMaintenanceService,
     DownloadReservationService,
     DownloadWorkerLifecycleService,
     QueuedDownloadPromotionService,
@@ -34,6 +38,6 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     YtDlpStreamClient,
     YtDlpStreamCommandBuilder,
   ],
-  exports: [DownloadCleanupCoordinator],
+  exports: [DownloadReservationMaintenanceService],
 })
 export class VideoWorkerModule {}
