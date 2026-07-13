@@ -3,7 +3,7 @@
 This backend uses one NestJS codebase with two production runtimes:
 
 - API runtime: accepts HTTP requests, manages anonymous sessions, performs profile discovery and admission checks, enqueues BullMQ jobs, serves file status, and redirects ready downloads.
-- Worker runtime: consumes BullMQ jobs, runs `yt-dlp` direct-format downloads, streams downloads to R2, updates file lifecycle state, reconciles reservations, promotes queued downloads, and runs cleanup.
+- Worker runtime: consumes BullMQ jobs, runs `yt-dlp` downloads, uses `ffmpeg` for split audio/video merges, streams downloads to R2, updates file lifecycle state, reconciles reservations, promotes queued downloads, and runs cleanup.
 
 ADR-0001 makes the backend the owner of video job intake, worker processing, storage, cleanup, sessions, quotas, migrations, and operational health.
 
@@ -14,7 +14,7 @@ cp .env.example .env
 pnpm install
 ```
 
-Fill all required values in `.env`. Leave `YTDLP_BINARY_PATH` empty to use the `yt-dlp` binary from `PATH`. `FFMPEG_BINARY_PATH` is optional and reserved for future merged/conversion profiles.
+Fill all required values in `.env`. Leave `YTDLP_BINARY_PATH` empty to use the `yt-dlp` binary from `PATH`. Set `FFMPEG_BINARY_PATH` when running merged video profiles outside Docker.
 
 `FRONTEND_ORIGIN` controls browser CORS access. Use a comma-separated list when running the frontend on more than one local origin, for example:
 
@@ -64,7 +64,7 @@ Queue reachability does not mean the worker is running. The health status is `de
 
 ## Binary Readiness
 
-The worker Docker image installs `yt-dlp`, then verifies it during the `worker-runtime` image build:
+The worker Docker image installs `yt-dlp`, copies pinned `ffmpeg` and `ffprobe` binaries from `yt-dlp/FFmpeg-Builds`, then verifies all three during the `worker-runtime` image build:
 
 ```bash
 pnpm run runtime:check:binaries
@@ -72,13 +72,14 @@ pnpm run runtime:check:binaries
 
 The API image does not install the system media toolchain. API health reports orchestration readiness and worker connectivity; media binary readiness belongs to the worker image.
 
-Production downloads use direct `yt-dlp` formats. The profile catalogue exposes video formats that already contain audio, plus audio-only formats. It does not expose video-only formats until merged output support is added.
+Production downloads prefer MP4 video-with-audio profiles. When a site only exposes split streams, the profile catalogue creates `video+audio` yt-dlp selectors and the worker muxes them through `ffmpeg` using `--merge-output-format mp4`.
+
+Merged downloads are written to the worker container temp directory first, then streamed to object storage. Size quotas still run before admission, but the worker host must have enough temporary disk for the largest admitted file.
 
 For custom binary locations, set:
 
 ```bash
 YTDLP_BINARY_PATH=/absolute/path/to/yt-dlp
-# Optional: only needed for future merged/conversion profile experiments.
 FFMPEG_BINARY_PATH=/absolute/path/to/ffmpeg
 ```
 

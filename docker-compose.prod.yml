@@ -64,6 +64,7 @@ services:
       - ${APP_ENV_FILE:-.env.production}
     environment:
       YTDLP_BINARY_PATH: /usr/local/bin/yt-dlp
+      FFMPEG_BINARY_PATH: /usr/local/bin/ffmpeg
     depends_on:
       - redis
       - backend-api

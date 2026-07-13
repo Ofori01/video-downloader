@@ -9,6 +9,10 @@ export interface YtDlpStreamCommand {
   profile: ResolvedDownloadFormat['profile'];
 }
 
+export type YtDlpOutputTarget =
+  | { kind: 'stdout' }
+  | { kind: 'file'; outputTemplate: string };
+
 @Injectable()
 export class YtDlpStreamCommandBuilder {
   constructor(private readonly config: AppConfigService) {}
@@ -16,6 +20,7 @@ export class YtDlpStreamCommandBuilder {
   buildStreamCommand(
     url: string,
     resolvedFormat: ResolvedDownloadFormat,
+    outputTarget: YtDlpOutputTarget = { kind: 'stdout' },
   ): YtDlpStreamCommand {
     const args = [
       '--no-playlist',
@@ -29,17 +34,24 @@ export class YtDlpStreamCommandBuilder {
       '--extractor-retries',
       '1',
       '--force-ipv4',
-      '-f',
-      resolvedFormat.format,
-      '-o',
-      '-',
-      url,
     ];
 
     if (this.config.ffmpegBinaryPath) {
-      args.unshift(this.config.ffmpegBinaryPath);
-      args.unshift('--ffmpeg-location');
+      args.push(
+        '--ffmpeg-location',
+        this.config.ffmpegBinaryPath,
+        '--merge-output-format',
+        'mp4',
+      );
     }
+
+    args.push(
+      '-f',
+      resolvedFormat.format,
+      '-o',
+      this.getOutputValue(outputTarget),
+      url,
+    );
 
     const binary = this.config.ytDlpBinaryPath || 'yt-dlp';
 
@@ -49,5 +61,9 @@ export class YtDlpStreamCommandBuilder {
       command: `${binary} ${args.join(' ')}`,
       profile: resolvedFormat.profile,
     };
+  }
+
+  private getOutputValue(outputTarget: YtDlpOutputTarget): string {
+    return outputTarget.kind === 'stdout' ? '-' : outputTarget.outputTemplate;
   }
 }

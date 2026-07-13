@@ -6,6 +6,15 @@ import { formatHasAudio, formatHasVideo } from './ytdlp-format-capabilities';
 import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
 import { AvailableProfile, YtDlpFormat, YtDlpMetadata } from './ytdlp.types';
 
+const MAX_VIDEO_PROFILES = 5;
+const MP4_MERGE_AUDIO_EXTENSIONS = ['aac', 'm4a', 'mp4'];
+
+interface ProfileFormatSelection {
+  format: YtDlpFormat;
+  seenKey?: string;
+  overrides?: Partial<AvailableProfile>;
+}
+
 @Injectable()
 export class ProfileCatalogueService {
   private readonly logger = new Logger(ProfileCatalogueService.name);
@@ -68,11 +77,18 @@ export class ProfileCatalogueService {
       return 0;
     }
 
-    const format = playableMetadata.formats.find(
+    const profile = this.buildProfiles(playableMetadata).find(
+      (item) => item.id === formatId || item.format === formatId,
+    );
+    if (profile) {
+      return Number(profile.estimatedSize ?? 0);
+    }
+
+    const rawFormat = playableMetadata.formats.find(
       (item) => item.formatId === formatId,
     );
-    return format
-      ? this.formatSize.getActualFormatSize(format, playableMetadata)
+    return rawFormat
+      ? this.formatSize.getActualFormatSize(rawFormat, playableMetadata)
       : 0;
   }
 
@@ -90,20 +106,18 @@ export class ProfileCatalogueService {
     const profiles: AvailableProfile[] = [];
     const seen = new Set<string>();
 
-    const best = metadata.formats.find(
-      (format) =>
-        format.formatId === metadata.formatId &&
-        this.isSupportedDirectFormat(format),
-    );
-    this.pushProfile(profiles, seen, metadata, best);
-
-    for (const height of [720, 480, 360]) {
-      const tier = this.findBestVideoTier(metadata.formats, height);
-      this.pushProfile(profiles, seen, metadata, tier, `video_${height}p`, {
-        label: this.formatTierLabel(height, tier),
-        resolution: `${height}p`,
-      });
-    }
+    this.getVideoSelections(metadata)
+      .slice(0, MAX_VIDEO_PROFILES)
+      .forEach((selection) =>
+        this.pushProfile(
+          profiles,
+          seen,
+          metadata,
+          selection.format,
+          selection.seenKey,
+          selection.overrides,
+        ),
+      );
 
     const audioOnly = this.findBestAudioOnly(metadata.formats);
     this.pushProfile(profiles, seen, metadata, audioOnly, 'audio_only', {
@@ -112,6 +126,94 @@ export class ProfileCatalogueService {
     });
 
     return profiles;
+  }
+
+  private getVideoSelections(
+    metadata: YtDlpMetadata,
+  ): ProfileFormatSelection[] {
+    const candidates = [
+      ...this.getMuxedVideoSelections(metadata),
+      ...this.getMergedVideoSelections(metadata),
+    ].sort((a, b) => this.compareVideoQuality(b.format, a.format));
+
+    const selected: ProfileFormatSelection[] = [];
+    const seenResolution = new Set<string>();
+
+    for (const candidate of candidates) {
+      const key = this.videoResolutionKey(candidate.format);
+      if (seenResolution.has(key)) {
+        continue;
+      }
+
+      seenResolution.add(key);
+      selected.push(candidate);
+    }
+
+    return selected;
+  }
+
+  private getMuxedVideoSelections(
+    metadata: YtDlpMetadata,
+  ): ProfileFormatSelection[] {
+    return metadata.formats
+      .filter((format) => this.isMuxedVideoFormat(format))
+      .map((format) => ({
+        format,
+        seenKey: this.profileSeenKey(format),
+      }));
+  }
+
+  private getMergedVideoSelections(
+    metadata: YtDlpMetadata,
+  ): ProfileFormatSelection[] {
+    const audio = this.findBestMp4MergeAudio(metadata.formats);
+    if (!audio) {
+      return [];
+    }
+
+    return metadata.formats
+      .filter((format) => this.isMergeableVideoFormat(format))
+      .map((video) => this.createMergedSelection(metadata, video, audio))
+      .filter(
+        (selection): selection is ProfileFormatSelection => selection !== null,
+      );
+  }
+
+  private createMergedSelection(
+    metadata: YtDlpMetadata,
+    video: YtDlpFormat,
+    audio: YtDlpFormat,
+  ): ProfileFormatSelection | null {
+    if (!video.formatId || !audio.formatId) {
+      return null;
+    }
+
+    const mergedFormat: YtDlpFormat = {
+      formatId: `${video.formatId}+${audio.formatId}`,
+      ext: 'mp4',
+      height: video.height,
+      vcodec: video.vcodec,
+      acodec: audio.acodec,
+      tbr: this.sumPositive(video.tbr ?? video.vbr, audio.abr ?? audio.tbr),
+      abr: audio.abr ?? audio.tbr,
+      vbr: video.vbr ?? video.tbr,
+      duration: video.duration ?? audio.duration ?? metadata.duration,
+      filesize: this.sumSizes(video.filesize, audio.filesize),
+      filesizeApprox: this.sumSizes(
+        video.filesizeApprox ?? video.filesize,
+        audio.filesizeApprox ?? audio.filesize,
+      ),
+    };
+
+    return {
+      format: mergedFormat,
+      seenKey: `merged:${mergedFormat.formatId}`,
+      overrides: {
+        label: this.formatMergedLabel(mergedFormat),
+        resolution: this.formatResolution(mergedFormat),
+        isAudioOnly: false,
+      },
+    };
   }
 
   private pushProfile(
@@ -126,7 +228,7 @@ export class ProfileCatalogueService {
       return;
     }
 
-    if (!this.isSupportedDirectFormat(format)) {
+    if (!this.isSupportedProfileFormat(format)) {
       return;
     }
 
@@ -160,51 +262,35 @@ export class ProfileCatalogueService {
     });
   }
 
-  private findBestVideoTier(
+  private findBestMp4MergeAudio(
     formats: YtDlpFormat[],
-    height: number,
   ): YtDlpFormat | undefined {
     return formats
       .filter(
         (format) =>
-          this.hasVideo(format) &&
+          !this.hasVideo(format) &&
           this.hasAudio(format) &&
-          format.height === height &&
-          format.ext === 'mp4',
+          MP4_MERGE_AUDIO_EXTENSIONS.includes(format.ext ?? ''),
       )
-      .sort((a, b) => {
-        const aBitrate = a.abr ?? a.tbr ?? 0;
-        const bBitrate = b.abr ?? b.tbr ?? 0;
-        if (aBitrate !== bBitrate) {
-          return bBitrate - aBitrate;
-        }
-
-        return (b.filesize ?? 0) - (a.filesize ?? 0);
-      })[0];
+      .sort((a, b) => this.compareAudioQuality(b, a))[0];
   }
 
   private findBestAudioOnly(formats: YtDlpFormat[]): YtDlpFormat | undefined {
     return formats
       .filter((format) => !this.hasVideo(format) && this.hasAudio(format))
-      .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))[0];
+      .sort((a, b) => this.compareAudioQuality(b, a))[0];
   }
 
-  private formatTierLabel(
-    height: number,
-    format: YtDlpFormat | undefined,
-  ): string | undefined {
-    if (!format) {
-      return undefined;
-    }
-
-    return `${height}p with audio`;
+  private formatMergedLabel(format: YtDlpFormat): string {
+    return `${this.formatResolution(format) ?? 'Video'} with audio`;
   }
 
   private formatLabel(format: YtDlpFormat): string {
     const parts: string[] = [];
 
-    if (format.height) {
-      parts.push(`${format.height}p`);
+    const resolution = this.formatResolution(format);
+    if (resolution) {
+      parts.push(resolution);
     }
 
     const videoCodec = this.getCodecLabel(format.vcodec);
@@ -256,9 +342,95 @@ export class ProfileCatalogueService {
     return formatHasAudio(format);
   }
 
-  private isSupportedDirectFormat(format: YtDlpFormat): boolean {
+  private isSupportedProfileFormat(format: YtDlpFormat): boolean {
     const hasVideo = this.hasVideo(format);
     const hasAudio = this.hasAudio(format);
     return (hasVideo && hasAudio) || (!hasVideo && hasAudio);
+  }
+
+  private isMuxedVideoFormat(format: YtDlpFormat): boolean {
+    return (
+      this.hasVideo(format) && this.hasAudio(format) && format.ext === 'mp4'
+    );
+  }
+
+  private isMergeableVideoFormat(format: YtDlpFormat): boolean {
+    return (
+      this.hasVideo(format) &&
+      !this.hasAudio(format) &&
+      format.ext === 'mp4' &&
+      Boolean(format.formatId)
+    );
+  }
+
+  private compareVideoQuality(a: YtDlpFormat, b: YtDlpFormat): number {
+    const heightDelta = (a.height ?? 0) - (b.height ?? 0);
+    if (heightDelta !== 0) {
+      return heightDelta;
+    }
+
+    const bitrateDelta = this.formatBitrate(a) - this.formatBitrate(b);
+    if (bitrateDelta !== 0) {
+      return bitrateDelta;
+    }
+
+    return this.formatSizeValue(a) - this.formatSizeValue(b);
+  }
+
+  private compareAudioQuality(a: YtDlpFormat, b: YtDlpFormat): number {
+    const bitrateDelta = (a.abr ?? a.tbr ?? 0) - (b.abr ?? b.tbr ?? 0);
+    if (bitrateDelta !== 0) {
+      return bitrateDelta;
+    }
+
+    return this.formatSizeValue(a) - this.formatSizeValue(b);
+  }
+
+  private formatBitrate(format: YtDlpFormat): number {
+    return format.tbr ?? this.sumPositive(format.vbr, format.abr) ?? 0;
+  }
+
+  private formatSizeValue(format: YtDlpFormat): number {
+    return format.filesize ?? format.filesizeApprox ?? 0;
+  }
+
+  private formatResolution(format: YtDlpFormat): string | undefined {
+    return format.height ? `${format.height}p` : undefined;
+  }
+
+  private profileSeenKey(format: YtDlpFormat): string | undefined {
+    return format.formatId ? `format:${format.formatId}` : undefined;
+  }
+
+  private videoResolutionKey(format: YtDlpFormat): string {
+    return format.height
+      ? `height:${format.height}`
+      : `format:${format.formatId}`;
+  }
+
+  private sumPositive(
+    first: number | undefined,
+    second: number | undefined,
+  ): number | undefined {
+    const total = [first, second]
+      .filter((value): value is number => this.isPositive(value))
+      .reduce((sum, value) => sum + value, 0);
+
+    return total > 0 ? total : undefined;
+  }
+
+  private sumSizes(
+    first: number | undefined,
+    second: number | undefined,
+  ): number | undefined {
+    if (!this.isPositive(first) && !this.isPositive(second)) {
+      return undefined;
+    }
+
+    return (first ?? 0) + (second ?? 0);
+  }
+
+  private isPositive(value: number | undefined): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
   }
 }

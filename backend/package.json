@@ -22,7 +22,7 @@
     "runtime:api": "node dist/main.js",
     "runtime:worker": "node dist/worker.js",
     "runtime:migrate": "typeorm migration:run -d dist/database.config.js",
-    "runtime:check:binaries": "yt-dlp --version",
+    "runtime:check:binaries": "yt-dlp --version && ffmpeg -version >/dev/null && ffprobe -version >/dev/null",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

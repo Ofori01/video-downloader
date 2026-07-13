@@ -119,7 +119,7 @@ The frontend image is built with `NEXT_PUBLIC_API_BASE_URL=/`, so browser reques
 
 `docker-compose.prod.yml` builds two backend images from `backend/Dockerfile`:
 
-- `video-downloader-backend-api:local`: API and migration runtime; does not install Python or the pip-installed `yt-dlp` toolchain.
-- `video-downloader-backend-worker:local`: worker runtime; installs and verifies `yt-dlp` during the Docker build. It does not install `ffmpeg` for the direct-format production path.
+- `video-downloader-backend-api:local`: API and migration runtime; does not install Python, `yt-dlp`, or `ffmpeg`.
+- `video-downloader-backend-worker:local`: worker runtime; installs and verifies `yt-dlp`, plus pinned `ffmpeg` and `ffprobe` binaries from `yt-dlp/FFmpeg-Builds` for split-stream MP4 merges.
 
 The API health endpoint reports database, Redis, queue, and connected worker readiness. Media binary readiness is enforced by the worker image build.

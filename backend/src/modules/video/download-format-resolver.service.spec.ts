@@ -1,4 +1,8 @@
-import { DownloadFormatResolver } from './download-format-resolver.service';
+import {
+  DEFAULT_MERGED_MP4_FORMAT,
+  DownloadFormatResolver,
+  FALLBACK_MERGED_MP4_FORMAT,
+} from './download-format-resolver.service';
 
 describe('DownloadFormatResolver', () => {
   const resolver = new DownloadFormatResolver();
@@ -8,21 +12,36 @@ describe('DownloadFormatResolver', () => {
       {
         format: '18',
         profile: 'custom',
+        requiresFileOutput: false,
       },
     );
   });
 
+  it('uses file output for selected merged formats', () => {
+    expect(
+      resolver.resolve({
+        formatId: 'dash-video+dash-audio',
+      }),
+    ).toEqual({
+      format: 'dash-video+dash-audio',
+      profile: 'custom',
+      requiresFileOutput: true,
+    });
+  });
+
   it('uses the fallback profile on retry when no custom format is selected', () => {
     expect(resolver.resolve({ fallbackProfile: true })).toEqual({
-      format: 'b[height<=720][ext=mp4]/b[height<=720]/b',
+      format: FALLBACK_MERGED_MP4_FORMAT,
       profile: 'fallback',
+      requiresFileOutput: true,
     });
   });
 
   it('uses the default mp4-oriented profile by default', () => {
     expect(resolver.resolve()).toEqual({
-      format: 'b[ext=mp4]/b',
+      format: DEFAULT_MERGED_MP4_FORMAT,
       profile: 'default',
+      requiresFileOutput: true,
     });
   });
 });
