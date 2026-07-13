@@ -45,6 +45,8 @@ const normalizeFormat = (value: unknown): YtDlpFormat | null => {
   return {
     formatId: asOptionalString(value.format_id),
     ext: asOptionalString(value.ext),
+    protocol: asOptionalString(value.protocol),
+    hasUrl: typeof value.url === 'string' && value.url.length > 0,
     height: asOptionalNumber(value.height),
     vcodec: asOptionalString(value.vcodec),
     acodec: asOptionalString(value.acodec),
@@ -76,6 +78,12 @@ export const normalizeYtDlpMetadata = (
         .filter((item): item is YtDlpFormat => item !== null)
     : [];
 
+  const entries = Array.isArray(value.entries)
+    ? value.entries
+        .map(normalizeYtDlpMetadata)
+        .filter((item): item is YtDlpMetadata => item !== null)
+    : [];
+
   return {
     title: asOptionalString(value.title),
     formatId: asOptionalString(value.format_id),
@@ -85,5 +93,6 @@ export const normalizeYtDlpMetadata = (
     filesizeApprox: asOptionalNumber(value.filesize_approx),
     requestedDownloads,
     formats,
+    entries,
   };
 };

@@ -19,6 +19,21 @@ describe('download output metadata', () => {
     });
   });
 
+  it('infers video/mp4 for direct MP4 formats with missing codec fields', () => {
+    expect(
+      inferDownloadOutput({
+        ext: 'mp4',
+        protocol: 'https',
+        hasUrl: true,
+        height: 1024,
+      }),
+    ).toEqual({
+      mediaKind: 'video',
+      extension: 'mp4',
+      contentType: 'video/mp4',
+    });
+  });
+
   it('infers audio/mp4 for m4a audio-only formats', () => {
     expect(
       inferDownloadOutput({

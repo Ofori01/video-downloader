@@ -34,6 +34,8 @@ describe('normalizeYtDlpMetadata', () => {
         {
           formatId: '18',
           ext: 'mp4',
+          protocol: undefined,
+          hasUrl: false,
           height: 720,
           vcodec: 'h264',
           acodec: 'aac',
@@ -45,7 +47,56 @@ describe('normalizeYtDlpMetadata', () => {
           filesizeApprox: 500,
         },
       ],
+      entries: [],
     });
+  });
+
+  it('normalizes playlist entries with their own formats', () => {
+    const metadata = normalizeYtDlpMetadata({
+      _type: 'playlist',
+      title: 'Tweet with multiple videos',
+      entries: [
+        {
+          title: 'Tweet video #1',
+          format_id: 'http-2176',
+          formats: [
+            {
+              format_id: 'http-2176',
+              ext: 'mp4',
+              protocol: 'https',
+              url: 'https://video.example/media.mp4',
+              height: 1280,
+              tbr: 2176,
+              filesize_approx: 2_900_000,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        title: 'Tweet with multiple videos',
+        formats: [],
+        entries: [
+          expect.objectContaining({
+            title: 'Tweet video #1',
+            formatId: 'http-2176',
+            formats: [
+              expect.objectContaining({
+                formatId: 'http-2176',
+                ext: 'mp4',
+                protocol: 'https',
+                hasUrl: true,
+                height: 1280,
+                tbr: 2176,
+                filesizeApprox: 2_900_000,
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
   });
 
   it('returns null for non-object metadata', () => {
