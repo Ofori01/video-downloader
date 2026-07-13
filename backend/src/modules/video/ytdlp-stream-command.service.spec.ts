@@ -10,13 +10,12 @@ describe('YtDlpStreamCommandBuilder', () => {
     const command = builder.buildStreamCommand('https://example.com/video', {
       format: '18',
       profile: 'custom',
+      requiresFileOutput: false,
     });
 
     expect(command.binary).toBe('/usr/local/bin/yt-dlp');
     expect(command.profile).toBe('custom');
     expect(command.args).toEqual([
-      '--ffmpeg-location',
-      '/usr/bin/ffmpeg',
       '--no-playlist',
       '--newline',
       '--socket-timeout',
@@ -28,6 +27,10 @@ describe('YtDlpStreamCommandBuilder', () => {
       '--extractor-retries',
       '1',
       '--force-ipv4',
+      '--ffmpeg-location',
+      '/usr/bin/ffmpeg',
+      '--merge-output-format',
+      'mp4',
       '-f',
       '18',
       '-o',
@@ -46,7 +49,32 @@ describe('YtDlpStreamCommandBuilder', () => {
       builder.buildStreamCommand('https://example.com/video', {
         format: 'b[ext=mp4]/b',
         profile: 'default',
+        requiresFileOutput: true,
       }).binary,
     ).toBe('yt-dlp');
+  });
+
+  it('writes to a file output template when requested', () => {
+    const builder = new YtDlpStreamCommandBuilder({
+      ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
+      ffmpegBinaryPath: '/usr/local/bin/ffmpeg',
+    } as never);
+
+    const command = builder.buildStreamCommand(
+      'https://example.com/video',
+      {
+        format: 'video+audio',
+        profile: 'custom',
+        requiresFileOutput: true,
+      },
+      {
+        kind: 'file',
+        outputTemplate: '/tmp/download.%(ext)s',
+      },
+    );
+
+    expect(command.args).toEqual(
+      expect.arrayContaining(['-o', '/tmp/download.%(ext)s']),
+    );
   });
 });

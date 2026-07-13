@@ -173,7 +173,7 @@ describe('ProfileCatalogueService', () => {
         isAudioOnly: false,
       }),
       expect.objectContaining({
-        id: '720-av',
+        id: '720-v+audio',
         label: '720p with audio',
         ext: 'mp4',
         contentType: 'video/mp4',
@@ -201,6 +201,92 @@ describe('ProfileCatalogueService', () => {
         }),
       ]),
     );
+  });
+
+  it('builds merged MP4 profiles from split Instagram-style video and audio streams', async () => {
+    const service = createService();
+    metadataClient.getMetadata.mockResolvedValue({
+      title: 'Instagram reel',
+      formatId: '3',
+      duration: 80,
+      requestedDownloads: [],
+      formats: [
+        {
+          formatId: 'dash-audio',
+          ext: 'm4a',
+          protocol: 'https',
+          hasUrl: true,
+          vcodec: 'none',
+          acodec: 'mp4a.40.5',
+          abr: 69,
+        },
+        {
+          formatId: '3',
+          ext: 'mp4',
+          protocol: 'https',
+          hasUrl: true,
+        },
+        {
+          formatId: 'dash-720v',
+          ext: 'mp4',
+          protocol: 'https',
+          hasUrl: true,
+          height: 1280,
+          vcodec: 'vp09.00.31.08.00.01.01.01.00',
+          acodec: 'none',
+          tbr: 470,
+        },
+        {
+          formatId: 'dash-1080v',
+          ext: 'mp4',
+          protocol: 'https',
+          hasUrl: true,
+          height: 1920,
+          vcodec: 'vp09.00.40.08.00.01.01.01.00',
+          acodec: 'none',
+          tbr: 789,
+        },
+      ],
+    });
+
+    await expect(
+      service.getAvailableProfiles('https://www.instagram.com/reel/example'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'dash-1080v+dash-audio',
+        format: 'dash-1080v+dash-audio',
+        label: '1920p with audio',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
+        resolution: '1920p',
+        hasAudio: true,
+        hasVideo: true,
+        isAudioOnly: false,
+      }),
+      expect.objectContaining({
+        id: 'dash-720v+dash-audio',
+        format: 'dash-720v+dash-audio',
+        label: '1280p with audio',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
+        resolution: '1280p',
+        hasAudio: true,
+        hasVideo: true,
+        isAudioOnly: false,
+      }),
+      expect.objectContaining({
+        id: 'dash-audio',
+        label: 'Audio only (m4a)',
+        ext: 'm4a',
+        contentType: 'audio/mp4',
+        mediaKind: 'audio',
+        hasAudio: true,
+        hasVideo: false,
+        isAudioOnly: true,
+      }),
+    ]);
   });
 
   it('resolves a selected profile from the generated catalogue', async () => {
