@@ -1,0 +1,62 @@
+services:
+  backend-api:
+    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    restart: unless-stopped
+    init: true
+    command: ["pnpm", "run", "runtime:api"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.vps}
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-3100}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/system/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  backend-worker:
+    image: ${BACKEND_WORKER_IMAGE:?BACKEND_WORKER_IMAGE is required}
+    restart: unless-stopped
+    init: true
+    command: ["pnpm", "run", "runtime:worker"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.vps}
+    environment:
+      YTDLP_BINARY_PATH: /usr/local/bin/yt-dlp
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  backend-migrate:
+    image: ${BACKEND_API_IMAGE:?BACKEND_API_IMAGE is required}
+    profiles:
+      - migrate
+    command: ["pnpm", "run", "runtime:migrate"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.vps}
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    init: true
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:
