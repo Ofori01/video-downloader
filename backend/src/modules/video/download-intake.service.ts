@@ -21,6 +21,7 @@ import {
 } from './download-output';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
 import { ProfileCatalogueService } from './profile-catalogue.service';
+import type { AvailableProfile } from './ytdlp.types';
 
 export interface SubmitDownloadCommand {
   url: string;
@@ -152,12 +153,7 @@ export class DownloadIntakeService {
       throw new BadRequestException('Selected profile is not available');
     }
 
-    const estimatedSize = Number(profile.estimatedSize ?? 0);
-    if (!Number.isFinite(estimatedSize) || estimatedSize <= 0) {
-      throw new BadRequestException(
-        'Unable to estimate file size - selected format has no size information',
-      );
-    }
+    const estimatedSize = this.resolveSelectedProfileEstimate(profile);
 
     return {
       estimatedSize,
@@ -167,6 +163,15 @@ export class DownloadIntakeService {
         contentType: profile.contentType,
       }),
     };
+  }
+
+  private resolveSelectedProfileEstimate(profile: AvailableProfile): number {
+    const estimatedSize = Number(profile.estimatedSize ?? 0);
+    if (Number.isFinite(estimatedSize) && estimatedSize > 0) {
+      return estimatedSize;
+    }
+
+    return Math.min(this.config.maxFileBytes, this.config.sessionMaxBytes);
   }
 
   private async attachQueueJob(fileId: string, jobId: string): Promise<void> {

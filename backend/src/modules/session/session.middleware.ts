@@ -1,5 +1,5 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+import type { CookieOptions, NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { AppConfigService } from '../../config/app-config.service';
 import { SessionService } from './session.service';
@@ -20,7 +20,7 @@ export class SessionMiddleware implements NestMiddleware {
       sessionId = randomUUID();
       res.cookie(this.config.sessionCookieName, sessionId, {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: this.resolveSessionCookieSameSite(),
         secure: this.config.sessionCookieSecure,
         maxAge: this.config.sessionCookieMaxAgeSeconds * 1000,
       });
@@ -30,5 +30,9 @@ export class SessionMiddleware implements NestMiddleware {
     await this.sessionService.touchSession(sessionId);
 
     next();
+  }
+
+  private resolveSessionCookieSameSite(): CookieOptions['sameSite'] {
+    return this.config.sessionCookieSecure ? 'none' : 'lax';
   }
 }
