@@ -10,6 +10,8 @@ describe('DownloadIntakeService', () => {
   const config = {
     enableNewRequests: true,
     sessionMaxJobs: 5,
+    maxFileBytes: 5000,
+    sessionMaxBytes: 3000,
   };
 
   const fileStore = {
@@ -180,6 +182,52 @@ describe('DownloadIntakeService', () => {
       'file-processing-1',
       'job-1',
     );
+  });
+
+  it('uses the max file size reservation when a selected profile has no estimate', async () => {
+    const service = createService();
+    profileCatalogue.getProfile.mockResolvedValue({
+      id: 'merged',
+      format: 'video+audio',
+      ext: 'mp4',
+      contentType: 'video/mp4',
+      mediaKind: 'video',
+      estimatedSize: 0,
+    });
+    fileStore.createProcessingDownload.mockResolvedValue({
+      id: 'file-processing-1',
+    });
+    queueProducer.enqueueDownloadJob.mockResolvedValue('job-1');
+
+    const result = await service.submit({
+      url: 'https://example.com/video',
+      sessionId: 'session-1',
+      profileId: 'merged',
+    });
+
+    expect(result).toEqual({
+      fileId: 'file-processing-1',
+      jobId: 'job-1',
+      estimatedSize: 3000,
+      status: FileStatus.PROCESSING,
+    });
+    expect(reservationService.evaluateAdmission).toHaveBeenCalledWith(
+      'session-1',
+      3000,
+    );
+    expect(reservationService.reserve).toHaveBeenCalledWith('session-1', 3000);
+    expect(queueProducer.enqueueDownloadJob).toHaveBeenCalledWith({
+      fileId: 'file-processing-1',
+      url: 'https://example.com/video',
+      sessionId: 'session-1',
+      reservedBytes: 3000,
+      profileId: 'merged',
+      output: {
+        mediaKind: 'video',
+        extension: 'mp4',
+        contentType: 'video/mp4',
+      },
+    });
   });
 
   it('rejects an unavailable selected profile', async () => {
