@@ -16,7 +16,9 @@ export class YtDlpMetadataClient {
   }
 
   async getMetadata(url: string): Promise<YtDlpMetadata | null> {
-    const rawMetadata: unknown = await this.client.getInfoAsync(url);
+    const rawMetadata: unknown = await this.client.getInfoAsync(url, {
+      flatPlaylist: false,
+    });
     return normalizeYtDlpMetadata(rawMetadata);
   }
 }

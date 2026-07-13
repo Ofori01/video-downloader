@@ -33,6 +33,8 @@ export interface YtDlpRequestedDownload {
 export interface YtDlpFormat {
   formatId?: string;
   ext?: string;
+  protocol?: string;
+  hasUrl?: boolean;
   height?: number;
   vcodec?: string;
   acodec?: string;
@@ -53,4 +55,5 @@ export interface YtDlpMetadata {
   filesizeApprox?: number;
   requestedDownloads: YtDlpRequestedDownload[];
   formats: YtDlpFormat[];
+  entries?: YtDlpMetadata[];
 }

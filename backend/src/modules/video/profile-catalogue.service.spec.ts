@@ -31,6 +31,87 @@ describe('ProfileCatalogueService', () => {
     ).resolves.toEqual([]);
   });
 
+  it('builds profiles from the first playable playlist entry', async () => {
+    const service = createService();
+    metadataClient.getMetadata.mockResolvedValue({
+      title: 'Tweet with multiple videos',
+      requestedDownloads: [],
+      formats: [],
+      entries: [
+        {
+          title: 'Tweet video #1',
+          formatId: 'http-2176',
+          requestedDownloads: [],
+          formats: [
+            {
+              formatId: 'http-2176',
+              ext: 'mp4',
+              protocol: 'https',
+              hasUrl: true,
+              height: 1280,
+              tbr: 2176,
+              filesizeApprox: 2_900_000,
+            },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      service.getAvailableProfiles('https://x.com/example/status/123/video/1'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'http-2176',
+        label: '1280p · MP4',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
+        resolution: '1280p',
+        hasAudio: true,
+        hasVideo: true,
+        isAudioOnly: false,
+      }),
+    ]);
+  });
+
+  it('treats direct HTTP MP4 formats without codec fields as muxed video', async () => {
+    const service = createService();
+    metadataClient.getMetadata.mockResolvedValue({
+      title: 'Tweet video',
+      formatId: 'http-2176',
+      requestedDownloads: [],
+      formats: [
+        {
+          formatId: 'http-2176',
+          ext: 'mp4',
+          protocol: 'https',
+          hasUrl: true,
+          height: 1024,
+          tbr: 2176,
+          filesizeApprox: 35_854_224,
+        },
+      ],
+    });
+
+    await expect(
+      service.getAvailableProfiles('https://x.com/example/status/123'),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'http-2176',
+        label: '1024p · MP4',
+        ext: 'mp4',
+        contentType: 'video/mp4',
+        mediaKind: 'video',
+        resolution: '1024p',
+        codec: undefined,
+        audioCodec: undefined,
+        hasAudio: true,
+        hasVideo: true,
+        isAudioOnly: false,
+      }),
+    ]);
+  });
+
   it('builds best, quality tier, and audio-only profiles', async () => {
     const service = createService();
     const metadata: YtDlpMetadata = {

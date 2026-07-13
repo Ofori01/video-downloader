@@ -1,3 +1,5 @@
+import { formatHasVideo } from './ytdlp-format-capabilities';
+
 export type DownloadMediaKind = 'audio' | 'video';
 
 export interface DownloadOutput {
@@ -8,6 +10,9 @@ export interface DownloadOutput {
 
 interface MediaFormatProbe {
   ext?: string;
+  protocol?: string;
+  hasUrl?: boolean;
+  height?: number;
   vcodec?: string;
   acodec?: string;
 }
@@ -48,7 +53,7 @@ const CONTENT_TYPE_BY_EXTENSION: Record<
 };
 
 export function inferDownloadOutput(format: MediaFormatProbe): DownloadOutput {
-  const mediaKind = hasVideo(format) ? 'video' : 'audio';
+  const mediaKind = formatHasVideo(format) ? 'video' : 'audio';
   const extension = normalizeExtension(format.ext);
 
   return {
@@ -108,8 +113,4 @@ function normalizeExtension(extension: string | undefined): string {
 function normalizeContentType(contentType: string | undefined): string | null {
   const normalized = contentType?.trim().toLowerCase();
   return normalized && normalized.includes('/') ? normalized : null;
-}
-
-function hasVideo(format: MediaFormatProbe): boolean {
-  return Boolean(format.vcodec && format.vcodec !== 'none');
 }

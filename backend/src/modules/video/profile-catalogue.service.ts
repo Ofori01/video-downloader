@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { inferDownloadOutput } from './download-output';
 import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
 import type { VideoMetadataClient } from './video-metadata-client';
+import { formatHasAudio, formatHasVideo } from './ytdlp-format-capabilities';
 import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
 import { AvailableProfile, YtDlpFormat, YtDlpMetadata } from './ytdlp.types';
 
@@ -22,7 +23,8 @@ export class ProfileCatalogueService {
       return [];
     }
 
-    if (metadata.formats.length === 0) {
+    const playableMetadata = this.selectPlayableMetadata(metadata);
+    if (!playableMetadata) {
       this.logger.warn(
         `No formats array in metadata for URL: ${url}. Title: ${
           metadata.title ?? 'unknown'
@@ -31,7 +33,7 @@ export class ProfileCatalogueService {
       return [];
     }
 
-    return this.buildProfiles(metadata);
+    return this.buildProfiles(playableMetadata);
   }
 
   async getProfile(
@@ -43,8 +45,13 @@ export class ProfileCatalogueService {
       return null;
     }
 
+    const playableMetadata = this.selectPlayableMetadata(metadata);
+    if (!playableMetadata) {
+      return null;
+    }
+
     return (
-      this.buildProfiles(metadata).find(
+      this.buildProfiles(playableMetadata).find(
         (profile) => profile.id === profileId || profile.format === profileId,
       ) ?? null
     );
@@ -56,8 +63,27 @@ export class ProfileCatalogueService {
       return 0;
     }
 
-    const format = metadata.formats.find((item) => item.formatId === formatId);
-    return format ? this.formatSize.getActualFormatSize(format, metadata) : 0;
+    const playableMetadata = this.selectPlayableMetadata(metadata);
+    if (!playableMetadata) {
+      return 0;
+    }
+
+    const format = playableMetadata.formats.find(
+      (item) => item.formatId === formatId,
+    );
+    return format
+      ? this.formatSize.getActualFormatSize(format, playableMetadata)
+      : 0;
+  }
+
+  private selectPlayableMetadata(
+    metadata: YtDlpMetadata,
+  ): YtDlpMetadata | null {
+    if (metadata.formats.length > 0) {
+      return metadata;
+    }
+
+    return metadata.entries?.find((entry) => entry.formats.length > 0) ?? null;
   }
 
   private buildProfiles(metadata: YtDlpMetadata): AvailableProfile[] {
@@ -104,8 +130,8 @@ export class ProfileCatalogueService {
       return;
     }
 
-    const keys = [seenKey, format.formatId].filter(
-      (value): value is string => Boolean(value),
+    const keys = [seenKey, format.formatId].filter((value): value is string =>
+      Boolean(value),
     );
     if (keys.some((key) => seen.has(key))) {
       return;
@@ -125,8 +151,8 @@ export class ProfileCatalogueService {
       resolution:
         overrides?.resolution ??
         (format.height ? `${format.height}p` : undefined),
-      codec: hasVideo ? this.cleanCodec(format.vcodec ?? '') : undefined,
-      audioCodec: hasAudio ? this.cleanCodec(format.acodec ?? '') : undefined,
+      codec: this.getCodecLabel(format.vcodec),
+      audioCodec: this.getCodecLabel(format.acodec),
       estimatedSize: this.formatSize.getActualFormatSize(format, metadata),
       hasAudio,
       hasVideo,
@@ -181,12 +207,14 @@ export class ProfileCatalogueService {
       parts.push(`${format.height}p`);
     }
 
-    if (this.hasVideo(format)) {
-      parts.push(this.cleanCodec(format.vcodec ?? ''));
+    const videoCodec = this.getCodecLabel(format.vcodec);
+    if (videoCodec) {
+      parts.push(videoCodec);
     }
 
-    if (this.hasAudio(format)) {
-      parts.push(this.cleanCodec(format.acodec ?? ''));
+    const audioCodec = this.getCodecLabel(format.acodec);
+    if (audioCodec) {
+      parts.push(audioCodec);
     }
 
     if (format.ext) {
@@ -212,12 +240,20 @@ export class ProfileCatalogueService {
     return map[lower] ?? codec.toUpperCase();
   }
 
+  private getCodecLabel(codec: string | undefined): string | undefined {
+    if (!codec || codec === 'none') {
+      return undefined;
+    }
+
+    return this.cleanCodec(codec);
+  }
+
   private hasVideo(format: YtDlpFormat): boolean {
-    return Boolean(format.vcodec && format.vcodec !== 'none');
+    return formatHasVideo(format);
   }
 
   private hasAudio(format: YtDlpFormat): boolean {
-    return Boolean(format.acodec && format.acodec !== 'none');
+    return formatHasAudio(format);
   }
 
   private isSupportedDirectFormat(format: YtDlpFormat): boolean {
