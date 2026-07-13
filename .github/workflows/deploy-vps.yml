@@ -5,6 +5,13 @@ on:
     branches:
       - master
       - main
+    paths:
+      - "backend/**"
+      - "deploy/vps/**"
+      - ".env.production.example"
+      - ".env.vps.example"
+      - "docker-compose.prod.yml"
+      - "docker-compose.vps.yml"
   workflow_dispatch:
 
 concurrency:
