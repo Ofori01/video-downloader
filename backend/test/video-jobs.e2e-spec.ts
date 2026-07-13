@@ -2,26 +2,59 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import type { IncomingHttpHeaders } from 'node:http';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { VideoController } from '../src/modules/video/video.controller';
-import { VideoService } from '../src/modules/video/video.service';
+import { DownloadFileAccessService } from '../src/modules/video/download-file-access.service';
+import { DownloadIntakeService } from '../src/modules/video/download-intake.service';
 import { SessionMiddleware } from '../src/modules/session/session.middleware';
 import { AppConfigService } from '../src/config/app-config.service';
 import { SessionService } from '../src/modules/session/session.service';
+import { ProfileCatalogueService } from '../src/modules/video/profile-catalogue.service';
 
-const videoServiceMock = {
-  submitDownload: jest.fn(),
+interface DownloadIntakeSubmitCommand {
+  url: string;
+  sessionId: string;
+  profileId?: string;
+}
+
+const downloadIntakeMock: {
+  submit: jest.Mock<Promise<unknown>, [DownloadIntakeSubmitCommand]>;
+} = {
+  submit: jest.fn<Promise<unknown>, [DownloadIntakeSubmitCommand]>(),
+};
+
+const downloadFileAccessMock = {
   getFileStatus: jest.fn(),
   getDownloadUrl: jest.fn(),
+};
+
+const getFirstSetCookie = (headers: IncomingHttpHeaders): string => {
+  const setCookie = headers['set-cookie'];
+  if (Array.isArray(setCookie)) {
+    return setCookie[0] ?? '';
+  }
+
+  return setCookie ?? '';
 };
 
 @Module({
   controllers: [VideoController],
   providers: [
     {
-      provide: VideoService,
-      useValue: videoServiceMock,
+      provide: DownloadIntakeService,
+      useValue: downloadIntakeMock,
+    },
+    {
+      provide: DownloadFileAccessService,
+      useValue: downloadFileAccessMock,
+    },
+    {
+      provide: ProfileCatalogueService,
+      useValue: {
+        getAvailableProfiles: jest.fn(),
+      },
     },
     {
       provide: AppConfigService,
@@ -73,7 +106,7 @@ describe('Video jobs endpoint (integration)', () => {
   });
 
   it('creates a new session cookie and submits job', async () => {
-    videoServiceMock.submitDownload.mockResolvedValue({
+    downloadIntakeMock.submit.mockResolvedValue({
       fileId: 'file-1',
       jobId: 'job-1',
       estimatedSize: 12345,
@@ -92,21 +125,16 @@ describe('Video jobs endpoint (integration)', () => {
       status: 'processing',
     });
 
-    expect(response.headers['set-cookie']).toBeDefined();
-    expect(videoServiceMock.submitDownload).toHaveBeenCalledTimes(1);
-    expect(videoServiceMock.submitDownload.mock.calls[0][0]).toBe(
-      'https://example.com/video',
-    );
-    expect(typeof videoServiceMock.submitDownload.mock.calls[0][1]).toBe(
-      'string',
-    );
-    expect(videoServiceMock.submitDownload.mock.calls[0][1]).not.toHaveLength(
-      0,
-    );
+    expect(getFirstSetCookie(response.headers)).not.toHaveLength(0);
+    expect(downloadIntakeMock.submit).toHaveBeenCalledTimes(1);
+    const submitted = downloadIntakeMock.submit.mock.calls[0][0];
+    expect(submitted.url).toBe('https://example.com/video');
+    expect(typeof submitted.sessionId).toBe('string');
+    expect(submitted.sessionId).not.toHaveLength(0);
   });
 
   it('reuses existing session cookie across requests', async () => {
-    videoServiceMock.submitDownload.mockResolvedValue({
+    downloadIntakeMock.submit.mockResolvedValue({
       fileId: 'file-2',
       jobId: 'job-2',
       estimatedSize: 200,
@@ -118,7 +146,7 @@ describe('Video jobs endpoint (integration)', () => {
       .send({ url: 'https://example.com/video' })
       .expect(201);
 
-    const cookie = firstResponse.headers['set-cookie'][0];
+    const cookie = getFirstSetCookie(firstResponse.headers);
 
     await request(app.getHttpServer())
       .post('/video/jobs')
@@ -126,9 +154,10 @@ describe('Video jobs endpoint (integration)', () => {
       .send({ url: 'https://example.com/video-2' })
       .expect(201);
 
-    expect(videoServiceMock.submitDownload).toHaveBeenCalledTimes(2);
-    const firstSessionId = videoServiceMock.submitDownload.mock.calls[0][1];
-    const secondSessionId = videoServiceMock.submitDownload.mock.calls[1][1];
+    expect(downloadIntakeMock.submit).toHaveBeenCalledTimes(2);
+    const firstSessionId = downloadIntakeMock.submit.mock.calls[0][0].sessionId;
+    const secondSessionId =
+      downloadIntakeMock.submit.mock.calls[1][0].sessionId;
     expect(firstSessionId).toBe(secondSessionId);
   });
 });

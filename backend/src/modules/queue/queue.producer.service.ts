@@ -3,17 +3,18 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DOWNLOAD_JOB_NAME } from './queue.constants';
 import { VIDEO_QUEUE_NAME } from './queue-name';
-import { DownloadVideoJobData } from './queue.types';
+import { DownloadVideoJobData, VideoQueueJobData } from './queue.types';
 
 @Injectable()
 export class QueueProducerService {
   constructor(
     @InjectQueue(VIDEO_QUEUE_NAME)
-    private readonly queue: Queue<DownloadVideoJobData>,
+    private readonly queue: Queue<VideoQueueJobData>,
   ) {}
 
   async enqueueDownloadJob(data: DownloadVideoJobData): Promise<string> {
     const job = await this.queue.add(DOWNLOAD_JOB_NAME, data, {
+      jobId: data.fileId,
       attempts: 2,
       backoff: {
         type: 'exponential',
@@ -24,19 +25,5 @@ export class QueueProducerService {
     });
 
     return job.id as string;
-  }
-
-  async getQueueMetrics(): Promise<{
-    waiting: number;
-    active: number;
-    failed: number;
-  }> {
-    const [waiting, active, failed] = await Promise.all([
-      this.queue.getWaitingCount(),
-      this.queue.getActiveCount(),
-      this.queue.getFailedCount(),
-    ]);
-
-    return { waiting, active, failed };
   }
 }

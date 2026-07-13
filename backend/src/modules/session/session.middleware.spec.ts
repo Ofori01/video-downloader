@@ -24,15 +24,16 @@ describe('SessionMiddleware', () => {
     const req = {
       cookies: {},
     } as unknown as Request;
+    const cookie = jest.fn();
     const res = {
-      cookie: jest.fn(),
+      cookie,
     } as unknown as Response;
     const next = jest.fn() as NextFunction;
 
     await middleware.use(req, res, next);
 
     expect(req.sessionContext?.id).toBeDefined();
-    expect(res.cookie).toHaveBeenCalledTimes(1);
+    expect(cookie).toHaveBeenCalledTimes(1);
     expect(sessionService.touchSession).toHaveBeenCalledWith(
       req.sessionContext?.id,
     );
@@ -44,15 +45,16 @@ describe('SessionMiddleware', () => {
     const req = {
       cookies: { sessionId: 'existing-session' },
     } as unknown as Request;
+    const cookie = jest.fn();
     const res = {
-      cookie: jest.fn(),
+      cookie,
     } as unknown as Response;
     const next = jest.fn() as NextFunction;
 
     await middleware.use(req, res, next);
 
     expect(req.sessionContext?.id).toBe('existing-session');
-    expect(res.cookie).not.toHaveBeenCalled();
+    expect(cookie).not.toHaveBeenCalled();
     expect(sessionService.touchSession).toHaveBeenCalledWith(
       'existing-session',
     );

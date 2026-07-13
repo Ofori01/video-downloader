@@ -1,12 +1,19 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { DOWNLOAD_JOB_NAME } from '../queue/queue.constants';
+import { DOWNLOAD_JOB_NAME, METADATA_JOB_NAME } from '../queue/queue.constants';
 import { VIDEO_QUEUE_NAME } from '../queue/queue-name';
-import { DownloadVideoJobData } from '../queue/queue.types';
+import {
+  DownloadVideoJobData,
+  ExtractMetadataJobData,
+  ExtractMetadataJobResult,
+  VideoQueueJobData,
+} from '../queue/queue.types';
 import { StorageService } from '../storage/storage.service';
-import { VideoService } from './video.service';
-import { YtDlpService } from './ytdlp.service';
+import { buildDownloadObjectKey, coerceDownloadOutput } from './download-output';
+import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
+import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
+import { YtDlpStreamClient } from './ytdlp-stream-client.service';
 
 @Processor(VIDEO_QUEUE_NAME, {
   concurrency: Number(process.env.WORKER_CONCURRENCY ?? 3),
@@ -25,25 +32,33 @@ export class VideoProcessor extends WorkerHost {
 
   constructor(
     private readonly storageService: StorageService,
-    @Inject(VideoService)
-    private readonly videoService: Pick<
-      VideoService,
+    @Inject(DownloadWorkerLifecycleService)
+    private readonly downloadLifecycle: Pick<
+      DownloadWorkerLifecycleService,
       | 'markReady'
       | 'reconcileReservationForCompletedFile'
       | 'markFailed'
       | 'releaseReservation'
     >,
-    private readonly ytDlpService: YtDlpService,
+    private readonly metadataClient: YtDlpMetadataClient,
+    private readonly ytDlpStreamClient: YtDlpStreamClient,
   ) {
     super();
   }
 
-  async process(job: Job<DownloadVideoJobData>): Promise<void> {
+  async process(
+    job: Job<VideoQueueJobData>,
+  ): Promise<void | ExtractMetadataJobResult> {
+    if (job.name === METADATA_JOB_NAME) {
+      return this.extractMetadata(job as Job<ExtractMetadataJobData>);
+    }
+
     if (job.name !== DOWNLOAD_JOB_NAME) {
       return;
     }
 
-    const { fileId, url, sessionId, reservedBytes } = job.data;
+    const downloadJob = job as Job<DownloadVideoJobData>;
+    const { fileId, url, sessionId, reservedBytes } = downloadJob.data;
     this.logger.log(
       [
         `jobId=${String(job.id)}`,
@@ -53,12 +68,16 @@ export class VideoProcessor extends WorkerHost {
       ].join(' '),
     );
 
-    const key = `videos/${fileId}.mp4`;
-    const useFallbackProfile = job.attemptsMade > 0;
-    const { stream, diagnostics } = this.ytDlpService.getDownloadStream(url, {
-      fallbackProfile: useFallbackProfile && !job.data.profileId,
-      formatId: job.data.profileId,
-    });
+    const output = coerceDownloadOutput(downloadJob.data.output);
+    const key = buildDownloadObjectKey(fileId, output);
+    const useFallbackProfile = downloadJob.attemptsMade > 0;
+    const { stream, diagnostics } = this.ytDlpStreamClient.getDownloadStream(
+      url,
+      {
+        fallbackProfile: useFallbackProfile && !downloadJob.data.profileId,
+        formatId: downloadJob.data.profileId,
+      },
+    );
     let streamFailure: unknown;
     let phase: 'upload' | 'mark_ready' | 'reconcile_reservation' = 'upload';
 
@@ -92,13 +111,13 @@ export class VideoProcessor extends WorkerHost {
 
     try {
       phase = 'upload';
-      await this.storageService.uploadStream(key, stream);
+      await this.storageService.uploadStream(key, stream, output.contentType);
 
       phase = 'mark_ready';
-      await this.videoService.markReady(fileId, key, bytes);
+      await this.downloadLifecycle.markReady(fileId, key, bytes, output);
 
       phase = 'reconcile_reservation';
-      await this.videoService.reconcileReservationForCompletedFile(
+      await this.downloadLifecycle.reconcileReservationForCompletedFile(
         sessionId,
         reservedBytes,
         bytes,
@@ -113,8 +132,8 @@ export class VideoProcessor extends WorkerHost {
         ].join(' '),
       );
     } catch (error) {
-      const maxAttempts = Number(job.opts.attempts ?? 1);
-      const isFinalAttempt = job.attemptsMade + 1 >= maxAttempts;
+      const maxAttempts = Number(downloadJob.opts.attempts ?? 1);
+      const isFinalAttempt = downloadJob.attemptsMade + 1 >= maxAttempts;
 
       this.logger.error(
         [
@@ -124,7 +143,7 @@ export class VideoProcessor extends WorkerHost {
           `event=processing_failed`,
           `source=${streamFailure ? 'ytdlp_stream' : 'upload_or_unknown'}`,
           `phase=${phase}`,
-          `attempt=${job.attemptsMade + 1}`,
+          `attempt=${downloadJob.attemptsMade + 1}`,
           `maxAttempts=${maxAttempts}`,
           `profile=${diagnostics.profile}`,
           `progress=${diagnostics.lastProgress ?? 'none'}`,
@@ -135,11 +154,23 @@ export class VideoProcessor extends WorkerHost {
       );
 
       if (isFinalAttempt) {
-        await this.videoService.markFailed(fileId, String(error));
-        await this.videoService.releaseReservation(sessionId, reservedBytes);
+        await this.downloadLifecycle.markFailed(fileId, String(error));
+        await this.downloadLifecycle.releaseReservation(
+          sessionId,
+          reservedBytes,
+        );
       }
 
       throw error;
     }
+  }
+
+  private async extractMetadata(
+    job: Job<ExtractMetadataJobData>,
+  ): Promise<ExtractMetadataJobResult> {
+    this.logger.log(`jobId=${String(job.id)} event=metadata_started`);
+    const metadata = await this.metadataClient.getMetadata(job.data.url);
+    this.logger.log(`jobId=${String(job.id)} event=metadata_completed`);
+    return { metadata };
   }
 }

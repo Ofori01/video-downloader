@@ -1,11 +1,34 @@
 import * as Joi from 'joi';
 
+function validateFrontendOrigin(
+  value: string,
+  helpers: Joi.CustomHelpers,
+): string | Joi.ErrorReport {
+  const origins = value.split(',').map((origin) => origin.trim());
+  const uriSchema = Joi.string().uri({ scheme: ['http', 'https'] });
+
+  if (origins.length === 0 || origins.some((origin) => origin.length === 0)) {
+    return helpers.error('any.invalid');
+  }
+
+  for (const origin of origins) {
+    const { error } = uriSchema.validate(origin);
+    if (error) {
+      return helpers.error('string.uri');
+    }
+  }
+
+  return value;
+}
+
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
     .default('development'),
   PORT: Joi.number().integer().min(1).max(65535).default(3000),
-  FRONTEND_ORIGIN: Joi.string().uri().required(),
+  FRONTEND_ORIGIN: Joi.string()
+    .custom(validateFrontendOrigin, 'frontend origin validation')
+    .required(),
 
   DATABASE_URL: Joi.string().uri().required(),
   REDIS_URL: Joi.string().uri().required(),
@@ -25,6 +48,10 @@ export const envValidationSchema = Joi.object({
 
   FILE_TTL_SECONDS: Joi.number().integer().min(60).max(3600).default(3600),
   SIGNED_URL_TTL_SECONDS: Joi.number().integer().min(60).default(900),
+  PROCESSING_STALE_AFTER_SECONDS: Joi.number()
+    .integer()
+    .min(600)
+    .default(21600),
 
   ENABLE_NEW_REQUESTS: Joi.boolean().default(true),
 
@@ -34,6 +61,6 @@ export const envValidationSchema = Joi.object({
   R2_ACCESS_KEY_ID: Joi.string().required(),
   R2_SECRET_ACCESS_KEY: Joi.string().required(),
 
-  YTDLP_BINARY_PATH: Joi.string().optional(),
-  FFMPEG_BINARY_PATH: Joi.string().optional(),
+  YTDLP_BINARY_PATH: Joi.string().allow('').optional(),
+  FFMPEG_BINARY_PATH: Joi.string().allow('').optional(),
 });

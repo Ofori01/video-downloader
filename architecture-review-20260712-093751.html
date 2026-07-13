@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review - video-downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      body { background: #fafaf9; }
+      .module-box { border: 1px solid #cbd5e1; background: #fff; }
+      .deep-box { background: linear-gradient(135deg, #0f172a, #1e293b); color: white; }
+      .seam-line { border-left: 2px dashed #64748b; }
+      .leak-arrow { color: #dc2626; border-color: #dc2626; }
+      .diagram-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #64748b; }
+      .thin-band { min-height: 36px; }
+      .thick-band { min-height: 148px; }
+      .mass-interface { background: #fee2e2; border: 1px solid #fecaca; }
+      .mass-implementation { background: #dbeafe; border: 1px solid #bfdbfe; }
+      .arrow::after { content: "->"; color: #64748b; padding: 0 .35rem; }
+      .red-arrow::after { content: "->"; color: #dc2626; padding: 0 .35rem; }
+    </style>
+  </head>
+  <body class="text-slate-900 font-sans">
+    <main class="max-w-6xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-6">
+        <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-wider text-slate-500">Architecture review</p>
+            <h1 class="text-4xl font-semibold tracking-normal">video-downloader</h1>
+          </div>
+          <p class="text-sm text-slate-500">Updated 2026-07-12 10:01 GMT</p>
+        </div>
+        <div class="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm md:grid-cols-4">
+          <div><span class="inline-block h-3 w-6 rounded border border-slate-300 bg-white align-middle"></span> solid box = module</div>
+          <div><span class="inline-block h-5 border-l-2 border-dashed border-slate-500 align-middle"></span> dashed line = seam</div>
+          <div><span class="text-red-600 font-semibold">-></span> red arrow = leakage</div>
+          <div><span class="inline-block h-3 w-6 rounded bg-slate-900 align-middle"></span> dark box = deep module</div>
+        </div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          ADR 0001 is accepted: Next.js owns the user-facing frontend; the Nest backend owns video job intake, worker processing, storage, cleanup, sessions, quotas, migrations, and operational health. This report no longer recommends a full Next standalone port.
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-10">
+        <article id="candidate-download-lifecycle" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Deepen the backend Download lifecycle module</h2>
+            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <pre class="mermaid">
+flowchart TB
+  Controller[VideoController] --> Submit[submitDownload]
+  Processor[VideoProcessor] --> Ready[markReady]
+  Processor --> Reconcile[reconcileReservationForCompletedFile]
+  Processor --> Failed[markFailed]
+  Processor --> Release[releaseReservation]
+  Cleanup[CleanupService] --> Find[findExpiredReadyFiles]
+  Cleanup --> Deleted[markDeleted]
+  Cleanup --> Release
+  Cleanup --> Recount[reconcileStorageUsageFromDb]
+  Cleanup --> Promote[promoteQueuedFiles]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class Ready,Reconcile,Failed,Release,Find,Deleted,Recount,Promote leak;
+                </pre>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="grid grid-cols-3 gap-3 text-center text-xs">
+                  <div class="module-box rounded p-3">HTTP route adapter</div>
+                  <div class="module-box rounded p-3">worker adapter</div>
+                  <div class="module-box rounded p-3">cleanup adapter</div>
+                </div>
+                <div class="mx-auto my-3 h-8 w-px border-l-2 border-dashed border-slate-500"></div>
+                <div class="deep-box rounded-lg p-5 text-center">
+                  <p class="diagram-label text-slate-300">deep module</p>
+                  <p class="text-lg font-semibold">Download lifecycle</p>
+                  <div class="mt-4 grid gap-2 text-xs md:grid-cols-4">
+                    <div class="rounded bg-white/10 p-2">admit</div>
+                    <div class="rounded bg-white/10 p-2">process</div>
+                    <div class="rounded bg-white/10 p-2">complete or fail</div>
+                    <div class="rounded bg-white/10 p-2">retain and promote</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                backend/src/modules/video/video.service.ts<br />
+                backend/src/modules/video/video.processor.ts<br />
+                backend/src/modules/cleanup/cleanup.service.ts<br />
+                backend/src/modules/video/video.controller.ts<br />
+                backend/src/modules/video/video.service.spec.ts
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">Worker and cleanup callers know too much file-state and reservation choreography, so the current interface is wide even though the implementation already contains the right behaviour.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Move the worker completion, failure, cleanup, reservation reconciliation, and queued promotion choreography behind the Download lifecycle module.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: state bugs concentrate</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">interface shrinks</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">tests hit lifecycle flows</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">worker adapter gets thinner</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article id="candidate-next-adapter" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Retire the native Next lifecycle modules</h2>
+            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Strong</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">ports & adapters</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <pre class="mermaid">
+flowchart LR
+  UI[Next UI] --> Routes[Next route handlers]
+  Routes --> NextServer[frontend/lib/server]
+  NextServer --> Pg[(Postgres)]
+  NextServer --> Redis[(Redis)]
+  NextServer --> Queue[(BullMQ)]
+  NextServer --> R2[(R2 signing)]
+  Queue -. no local worker .-> Gap[processing gap]
+  UI --> Backend[Nest backend still exists]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class NextServer,Gap leak;
+                </pre>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
+                  <span class="module-box rounded px-3 py-2">Next UI</span>
+                  <span class="arrow"></span>
+                  <span class="module-box rounded px-3 py-2">frontend adapter</span>
+                  <span class="arrow"></span>
+                  <span class="deep-box rounded px-4 py-3">Nest Download lifecycle</span>
+                </div>
+                <div class="mt-6 grid gap-2 text-xs md:grid-cols-3">
+                  <div class="module-box rounded p-3 text-center">browser HTTP adapter</div>
+                  <div class="module-box rounded p-3 text-center">optional proxy adapter</div>
+                  <div class="module-box rounded p-3 text-center">shared response types</div>
+                </div>
+                <div class="mt-5 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+                  ADR 0001 makes the backend the owner of the lifecycle; Next should stop duplicating that implementation.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                frontend/app/api/**/route.ts<br />
+                frontend/lib/server/*.ts<br />
+                frontend/api/http-client.ts<br />
+                frontend/README.md<br />
+                docs/adr/0001-split-next-frontend-nest-backend.md
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">The Next route handlers and server modules duplicate backend lifecycle work, contradict ADR 0001, and still cannot complete jobs without the backend worker.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Reduce Next to a frontend adapter that calls or proxies to the Nest backend, then remove the native server modules once the adapter path is stable.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: backend owns lifecycle</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">delete duplicate modules</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">one operational path</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">ADR and code align</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article id="candidate-profile-catalogue" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Unify the yt-dlp Profile catalogue module</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">local-substitutable</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="grid gap-3 text-xs">
+                  <div class="module-box rounded p-3">YtDlpService: metadata, profile list, stream, size estimate</div>
+                  <div class="module-box rounded p-3 leak-arrow border-red-300 text-red-700">VideoService: duplicate fallback estimate logic</div>
+                  <div class="module-box rounded p-3 leak-arrow border-red-300 text-red-700">frontend/lib/server/video-profiles.ts: migrated duplicate profile logic</div>
+                  <div class="module-box rounded p-3 leak-arrow border-red-300 text-red-700">frontend/services/video.service.ts: drops profileId</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="deep-box rounded-lg p-5 text-center">
+                  <p class="diagram-label text-slate-300">deep module</p>
+                  <p class="text-lg font-semibold">Profile catalogue</p>
+                  <div class="mt-4 grid gap-2 text-xs md:grid-cols-4">
+                    <div class="rounded bg-white/10 p-2">inspect metadata</div>
+                    <div class="rounded bg-white/10 p-2">rank profiles</div>
+                    <div class="rounded bg-white/10 p-2">estimate size</div>
+                    <div class="rounded bg-white/10 p-2">plan stream format</div>
+                  </div>
+                </div>
+                <div class="mt-4 grid gap-2 text-xs md:grid-cols-3">
+                  <div class="module-box rounded p-2 text-center">profile route</div>
+                  <div class="module-box rounded p-2 text-center">Download intake</div>
+                  <div class="module-box rounded p-2 text-center">worker adapter</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                backend/src/modules/video/ytdlp.service.ts<br />
+                backend/src/modules/video/video.service.ts<br />
+                frontend/lib/server/video-profiles.ts<br />
+                frontend/services/video.service.ts
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">Profile discovery, size estimation, and stream format selection are coupled but spread across modules, so the selected profile can drift from the downloaded format.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Make the backend Profile catalogue the single module that interprets yt-dlp metadata and feeds both Download intake and worker processing.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: profile bugs concentrate</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">fixture tests hit one module</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">profileId path is verifiable</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">leverage across callers</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article id="candidate-reservations" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Deepen the Reservation module</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <pre class="mermaid">
+flowchart TB
+  Video[VideoService] --> Session[SessionService]
+  Video --> Redis[RedisService]
+  Session --> Redis
+  Video -. storage_used key .-> Redis
+  Video -. session bytes key .-> Session
+  Cleanup[CleanupService] -. release choreography .-> Video
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class Video,Session,Redis leak;
+                </pre>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="grid grid-cols-[80px_1fr] gap-3">
+                  <div class="mass-interface rounded p-2 text-xs">small interface</div>
+                  <div class="deep-box rounded-lg p-5">
+                    <p class="diagram-label text-slate-300">deep module</p>
+                    <p class="text-lg font-semibold">Reservation</p>
+                    <div class="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                      <div class="rounded bg-white/10 p-2">session quota</div>
+                      <div class="rounded bg-white/10 p-2">global storage quota</div>
+                      <div class="rounded bg-white/10 p-2">reserve/release</div>
+                      <div class="rounded bg-white/10 p-2">DB reconciliation</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                backend/src/modules/video/video.service.ts<br />
+                backend/src/modules/session/session.service.ts<br />
+                backend/src/modules/queue/redis.service.ts<br />
+                backend/src/modules/queue/queue.constants.ts<br />
+                backend/src/modules/video/video.service.spec.ts
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">Session bytes, global storage bytes, Redis keys, and DB reconciliation leak across modules, so quota correctness requires reading several implementations at once.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Concentrate admission, reservation, release, and reconciliation rules in one Reservation module that the Download lifecycle module uses.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: quota rules concentrate</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">one fake Redis adapter</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">less key leakage</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">race tests get focused</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article id="candidate-client-job-flow" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Deepen the client Job flow module</h2>
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Worth exploring</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">in-process</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="space-y-2 text-xs">
+                  <div class="module-box thin-band rounded p-2">HomeShell: form, URL validation, profile state, localStorage</div>
+                  <div class="module-box thin-band rounded p-2">use-video-jobs: optimistic file, polling, toast</div>
+                  <div class="module-box thin-band rounded p-2 leak-arrow border-red-300 text-red-700">video.service.ts: dedupe, abort, drops profileId</div>
+                  <div class="module-box thin-band rounded p-2">video.api.ts: HTTP adapter</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="deep-box thick-band rounded-lg p-5">
+                  <p class="diagram-label text-slate-300">deep module</p>
+                  <p class="text-lg font-semibold">client Job flow</p>
+                  <p class="mt-3 text-sm text-slate-200">Profile-aware submit, dedupe, persistence, optimistic status, polling, and view model live behind one module.</p>
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-2 text-xs">
+                  <div class="module-box rounded p-2 text-center">Home view</div>
+                  <div class="module-box rounded p-2 text-center">Profile view</div>
+                  <div class="module-box rounded p-2 text-center">Job list view</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                frontend/components/patterns/home-shell.tsx<br />
+                frontend/components/patterns/profile-selector.tsx<br />
+                frontend/hooks/use-video-jobs.ts<br />
+                frontend/hooks/use-available-profiles.ts<br />
+                frontend/services/video.service.ts<br />
+                frontend/api/video.api.ts
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">The user Job flow is shallow across many modules, and a required profile selection is lost before the request crosses the HTTP seam.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Put submit, profile-aware payloads, local job persistence, polling, and view-model mapping behind a deeper client Job flow module.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: UI flow bugs concentrate</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">one profile submit test</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">HomeShell gets thinner</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">backend seam stays explicit</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article id="candidate-runtime-ops" class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="mr-auto text-2xl font-semibold">Deepen the Runtime operations module</h2>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Speculative</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">local-substitutable</span>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p class="diagram-label mb-2">Before</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                  <div class="mass-interface h-20 rounded p-2">Interface: package scripts and Docker default</div>
+                  <div class="mass-implementation h-24 rounded p-2">Implementation: API runtime, worker runtime, migrations, yt-dlp binary</div>
+                  <div class="mass-interface h-16 rounded p-2">Interface: health route says queue up</div>
+                  <div class="mass-implementation h-16 rounded p-2">Implementation: worker may not be running</div>
+                  <div class="mass-interface h-16 rounded p-2">Interface: README migration status</div>
+                  <div class="mass-implementation h-16 rounded p-2">Implementation: split ADR says otherwise</div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <p class="diagram-label mb-2">After</p>
+              <div class="rounded-lg border border-slate-200 bg-stone-50 p-4">
+                <div class="deep-box rounded-lg p-5">
+                  <p class="diagram-label text-slate-300">deep module</p>
+                  <p class="text-lg font-semibold">Runtime operations</p>
+                  <div class="mt-4 grid gap-2 text-xs md:grid-cols-3">
+                    <div class="rounded bg-white/10 p-2">API entrypoint</div>
+                    <div class="rounded bg-white/10 p-2">worker entrypoint</div>
+                    <div class="rounded bg-white/10 p-2">migration command</div>
+                    <div class="rounded bg-white/10 p-2">health semantics</div>
+                    <div class="rounded bg-white/10 p-2">binary readiness</div>
+                    <div class="rounded bg-white/10 p-2">deployment docs</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <dl class="mt-5 grid gap-4 text-sm md:grid-cols-2">
+            <div>
+              <dt class="font-semibold">Files</dt>
+              <dd class="mt-1 font-mono text-xs text-slate-600">
+                backend/package.json<br />
+                backend/Dockerfile<br />
+                backend/src/worker.ts<br />
+                backend/src/modules/health/health.service.ts<br />
+                frontend/README.md<br />
+                Plan.md
+              </dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Problem</dt>
+              <dd class="mt-1 text-slate-700">The split has separate runtime needs, but operational facts are scattered across scripts, Docker, README text, Plan.md, and health checks.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Solution</dt>
+              <dd class="mt-1 text-slate-700">Make runtime operations explicit around API, worker, migrations, binary readiness, and health semantics so the split has one operational story.</dd>
+            </div>
+            <div>
+              <dt class="font-semibold">Benefits</dt>
+              <dd class="mt-1">
+                <ul class="flex flex-wrap gap-2 text-xs">
+                  <li class="rounded bg-slate-100 px-2 py-1">locality: ops knowledge concentrates</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">deployment assumptions shrink</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">health tests improve</li>
+                  <li class="rounded bg-slate-100 px-2 py-1">docs stop drifting</li>
+                </ul>
+              </dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section id="top-recommendation" class="rounded-xl border border-slate-300 bg-slate-950 p-6 text-white">
+        <p class="text-xs uppercase tracking-wider text-slate-300">Top recommendation</p>
+        <h2 class="mt-2 text-2xl font-semibold">
+          <a class="underline decoration-slate-500 underline-offset-4" href="#candidate-download-lifecycle">Deepen the backend Download lifecycle module</a>
+        </h2>
+        <p class="mt-3 text-slate-200">Tackle this first because ADR 0001 makes the backend the lifecycle owner; worker completion, cleanup, reservation reconciliation, and queued promotion should be tested through one deep module instead of several shallow state-transition calls.</p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,184 @@
+name: Deploy VPS Backend
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: vps-backend-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test-backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Run backend tests
+        working-directory: backend
+        run: pnpm run test
+
+  build-and-push:
+    name: Build and push backend images
+    runs-on: ubuntu-latest
+    needs: test-backend
+    outputs:
+      api_image: ${{ steps.images.outputs.api_image }}
+      worker_image: ${{ steps.images.outputs.worker_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image names
+        id: images
+        run: |
+          owner_lc="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "api_image=${REGISTRY}/${owner_lc}/video-downloader-backend-api" >> "$GITHUB_OUTPUT"
+          echo "worker_image=${REGISTRY}/${owner_lc}/video-downloader-backend-worker" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: api-runtime
+          push: true
+          tags: |
+            ${{ steps.images.outputs.api_image }}:${{ github.sha }}
+            ${{ steps.images.outputs.api_image }}:latest
+          cache-from: type=gha,scope=backend-api
+          cache-to: type=gha,mode=max,scope=backend-api
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: worker-runtime
+          push: true
+          tags: |
+            ${{ steps.images.outputs.worker_image }}:${{ github.sha }}
+            ${{ steps.images.outputs.worker_image }}:latest
+          cache-from: type=gha,scope=backend-worker
+          cache-to: type=gha,mode=max,scope=backend-worker
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH || '/opt/video-downloader' }}
+      GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+      BACKEND_API_IMAGE: ${{ needs.build-and-push.outputs.api_image }}:${{ github.sha }}
+      BACKEND_WORKER_IMAGE: ${{ needs.build-and-push.outputs.worker_image }}:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/vps_deploy_key
+          chmod 600 ~/.ssh/vps_deploy_key
+          ssh-keyscan -p "$VPS_PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy compose file and image tags
+        run: |
+          target="${VPS_USER}@${VPS_HOST}"
+          ssh_opts=(-i ~/.ssh/vps_deploy_key -p "$VPS_PORT")
+          deploy_path_quoted="$(printf '%q' "$VPS_DEPLOY_PATH")"
+
+          ssh "${ssh_opts[@]}" "$target" "mkdir -p $deploy_path_quoted"
+          scp -i ~/.ssh/vps_deploy_key -P "$VPS_PORT" deploy/vps/docker-compose.yml "$target:$VPS_DEPLOY_PATH/docker-compose.yml"
+
+          {
+            printf 'BACKEND_API_IMAGE=%s\n' "$BACKEND_API_IMAGE"
+            printf 'BACKEND_WORKER_IMAGE=%s\n' "$BACKEND_WORKER_IMAGE"
+          } | ssh "${ssh_opts[@]}" "$target" "cat > $deploy_path_quoted/.env.images"
+
+      - name: Pull, migrate, and restart
+        run: |
+          target="${VPS_USER}@${VPS_HOST}"
+          ssh_opts=(-i ~/.ssh/vps_deploy_key -p "$VPS_PORT")
+          deploy_path_quoted="$(printf '%q' "$VPS_DEPLOY_PATH")"
+          ghcr_user_quoted="$(printf '%q' "$GHCR_PULL_USERNAME")"
+          ghcr_token_quoted="$(printf '%q' "$GHCR_PULL_TOKEN")"
+
+          ssh "${ssh_opts[@]}" "$target" \
+            "DEPLOY_PATH=$deploy_path_quoted GHCR_PULL_USERNAME=$ghcr_user_quoted GHCR_PULL_TOKEN=$ghcr_token_quoted bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$DEPLOY_PATH"
+
+          if [ ! -f .env.vps ]; then
+            echo "Missing $DEPLOY_PATH/.env.vps. Create it from .env.vps.example before the first deploy." >&2
+            exit 1
+          fi
+
+          if [ -n "${GHCR_PULL_USERNAME:-}" ] && [ -n "${GHCR_PULL_TOKEN:-}" ]; then
+            printf '%s' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "$GHCR_PULL_USERNAME" --password-stdin
+          fi
+
+          docker compose --env-file .env.vps --env-file .env.images pull
+          docker compose --env-file .env.vps --env-file .env.images --profile migrate run --rm backend-migrate
+          docker compose --env-file .env.vps --env-file .env.images up -d --remove-orphans
+          docker compose --env-file .env.vps --env-file .env.images ps
+
+          host_port="$(grep -E '^BACKEND_HOST_PORT=' .env.vps | tail -1 | cut -d= -f2- || true)"
+          host_port="${host_port:-3100}"
+          curl -fsS "http://127.0.0.1:${host_port}/system/health"
+
+          docker image prune -f --filter "until=168h"
+          REMOTE

@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { SessionEntity } from './session.entity';
 
@@ -43,6 +44,18 @@ export class FileEntity {
   @Column({ type: 'varchar', length: 64 })
   sessionId!: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  profileId!: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  mediaKind!: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  outputExtension!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  contentType!: string | null;
+
   @ManyToOne(() => SessionEntity, (session) => session.files, {
     onDelete: 'RESTRICT',
   })
@@ -52,6 +65,10 @@ export class FileEntity {
   @Index('idx_files_created_at')
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
+
+  @Index('idx_files_updated_at')
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt!: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
   downloadedAt!: Date | null;

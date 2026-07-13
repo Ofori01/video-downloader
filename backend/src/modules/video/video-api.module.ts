@@ -5,9 +5,16 @@ import { FileEntity } from '../../entities/file.entity';
 import { QueueModule } from '../queue/queue.module';
 import { SessionModule } from '../session/session.module';
 import { StorageModule } from '../storage/storage.module';
+import { DownloadFileAccessService } from './download-file-access.service';
+import { DownloadFileStore } from './download-file-store.service';
+import { DownloadIntakeService } from './download-intake.service';
+import { DownloadReservationService } from './download-reservation.service';
+import { DownloadSizeEstimator } from './download-size-estimator.service';
+import { ProfileCatalogueService } from './profile-catalogue.service';
+import { QueuedMetadataClient } from './queued-metadata-client.service';
 import { VideoController } from './video.controller';
-import { VideoService } from './video.service';
-import { YtDlpService } from './ytdlp.service';
+import { VIDEO_METADATA_CLIENT } from './video-metadata-client';
+import { YtDlpFormatSizeService } from './ytdlp-format-size.service';
 
 @Module({
   imports: [
@@ -18,7 +25,19 @@ import { YtDlpService } from './ytdlp.service';
     StorageModule,
   ],
   controllers: [VideoController],
-  providers: [VideoService, YtDlpService],
-  exports: [VideoService],
+  providers: [
+    DownloadFileAccessService,
+    DownloadFileStore,
+    DownloadIntakeService,
+    DownloadReservationService,
+    DownloadSizeEstimator,
+    ProfileCatalogueService,
+    QueuedMetadataClient,
+    YtDlpFormatSizeService,
+    {
+      provide: VIDEO_METADATA_CLIENT,
+      useExisting: QueuedMetadataClient,
+    },
+  ],
 })
 export class VideoApiModule {}

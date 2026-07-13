@@ -73,6 +73,10 @@ export class AppConfigService {
     return this.getNumber('SIGNED_URL_TTL_SECONDS');
   }
 
+  get processingStaleAfterSeconds(): number {
+    return this.getNumber('PROCESSING_STALE_AFTER_SECONDS');
+  }
+
   get enableNewRequests(): boolean {
     return this.getBoolean('ENABLE_NEW_REQUESTS');
   }
@@ -98,11 +102,11 @@ export class AppConfigService {
   }
 
   get ytDlpBinaryPath(): string | undefined {
-    return this.configService.get<string>('YTDLP_BINARY_PATH');
+    return this.getOptionalString('YTDLP_BINARY_PATH');
   }
 
   get ffmpegBinaryPath(): string | undefined {
-    return this.configService.get<string>('FFMPEG_BINARY_PATH');
+    return this.getOptionalString('FFMPEG_BINARY_PATH');
   }
 
   private getOrThrow(key: string): string {
@@ -130,5 +134,11 @@ export class AppConfigService {
     }
 
     return value;
+  }
+
+  private getOptionalString(key: string): string | undefined {
+    const value = this.configService.get<string>(key);
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
   }
 }

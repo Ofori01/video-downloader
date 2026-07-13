@@ -14,14 +14,16 @@ import {
 import type { Request, Response } from 'express';
 import { CreateVideoJobDto } from './dto/create-video-job.dto';
 import { AvailableProfileDto } from './dto/available-profiles.dto';
-import { VideoService } from './video.service';
-import { YtDlpService } from './ytdlp.service';
+import { DownloadFileAccessService } from './download-file-access.service';
+import { DownloadIntakeService } from './download-intake.service';
+import { ProfileCatalogueService } from './profile-catalogue.service';
 
 @Controller()
 export class VideoController {
   constructor(
-    private readonly videoService: VideoService,
-    private readonly ytDlpService: YtDlpService,
+    private readonly downloadFileAccess: DownloadFileAccessService,
+    private readonly downloadIntake: DownloadIntakeService,
+    private readonly profileCatalogue: ProfileCatalogueService,
   ) {}
 
   @Post('video/jobs')
@@ -32,16 +34,22 @@ export class VideoController {
       throw new InternalServerErrorException('Session context missing');
     }
 
-    return this.videoService.submitDownload(body.url, sessionId, body.profileId);
+    return this.downloadIntake.submit({
+      url: body.url,
+      sessionId,
+      profileId: body.profileId,
+    });
   }
 
   @Get('video/profiles')
-  async getProfiles(@Query('url') url?: string): Promise<AvailableProfileDto[]> {
+  async getProfiles(
+    @Query('url') url?: string,
+  ): Promise<AvailableProfileDto[]> {
     if (!url) {
       return [];
     }
 
-    const profiles = await this.ytDlpService.getAvailableProfiles(url);
+    const profiles = await this.profileCatalogue.getAvailableProfiles(url);
     return profiles;
   }
 
@@ -52,7 +60,7 @@ export class VideoController {
       throw new InternalServerErrorException('Session context missing');
     }
 
-    return this.videoService.getFileStatus(id, sessionId);
+    return this.downloadFileAccess.getFileStatus(id, sessionId);
   }
 
   @Get('download/:id')
@@ -66,7 +74,10 @@ export class VideoController {
       throw new InternalServerErrorException('Session context missing');
     }
 
-    const signedUrl = await this.videoService.getDownloadUrl(id, sessionId);
+    const signedUrl = await this.downloadFileAccess.getDownloadUrl(
+      id,
+      sessionId,
+    );
     res.redirect(signedUrl);
   }
 }

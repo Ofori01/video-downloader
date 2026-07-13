@@ -1,0 +1,206 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { randomUUID } from 'node:crypto';
+import { Repository } from 'typeorm';
+import { FileEntity, FileStatus } from '../../entities/file.entity';
+import { coerceDownloadOutput, DownloadOutput } from './download-output';
+
+export interface CreateDownloadFileInput {
+  url: string;
+  sessionId: string;
+  estimatedSize: number;
+  profileId?: string;
+  output: DownloadOutput;
+}
+
+@Injectable()
+export class DownloadFileStore {
+  constructor(
+    @InjectRepository(FileEntity)
+    private readonly fileRepository: Repository<FileEntity>,
+  ) {}
+
+  async createQueuedDownload(
+    input: CreateDownloadFileInput,
+  ): Promise<FileEntity> {
+    const output = coerceDownloadOutput(input.output);
+    const file = this.fileRepository.create({
+      key: `pending/${randomUUID()}`,
+      sourceUrl: input.url,
+      size: String(input.estimatedSize),
+      status: FileStatus.QUEUED,
+      sessionId: input.sessionId,
+      profileId: input.profileId ?? null,
+      mediaKind: output.mediaKind,
+      outputExtension: output.extension,
+      contentType: output.contentType,
+    });
+
+    return this.fileRepository.save(file);
+  }
+
+  async createProcessingDownload(
+    input: CreateDownloadFileInput,
+  ): Promise<FileEntity> {
+    const output = coerceDownloadOutput(input.output);
+    const file = this.fileRepository.create({
+      key: `pending/${randomUUID()}`,
+      sourceUrl: input.url,
+      size: String(input.estimatedSize),
+      status: FileStatus.PROCESSING,
+      sessionId: input.sessionId,
+      profileId: input.profileId ?? null,
+      mediaKind: output.mediaKind,
+      outputExtension: output.extension,
+      contentType: output.contentType,
+    });
+
+    return this.fileRepository.save(file);
+  }
+
+  async attachQueueJob(fileId: string, jobId: string): Promise<void> {
+    await this.fileRepository.update(fileId, { queueJobId: jobId });
+  }
+
+  async findForSession(
+    fileId: string,
+    sessionId: string,
+  ): Promise<FileEntity | null> {
+    return this.fileRepository.findOneBy({ id: fileId, sessionId });
+  }
+
+  async save(file: FileEntity): Promise<FileEntity> {
+    return this.fileRepository.save(file);
+  }
+
+  async markReady(
+    fileId: string,
+    key: string,
+    size: number,
+    expiresAt: Date,
+    output: DownloadOutput,
+  ): Promise<void> {
+    const coercedOutput = coerceDownloadOutput(output);
+    await this.fileRepository.update(fileId, {
+      key,
+      size: String(size),
+      status: FileStatus.READY,
+      expiresAt,
+      errorReason: null,
+      mediaKind: coercedOutput.mediaKind,
+      outputExtension: coercedOutput.extension,
+      contentType: coercedOutput.contentType,
+    });
+  }
+
+  async markFailed(fileId: string, reason: string): Promise<void> {
+    await this.fileRepository.update(fileId, {
+      status: FileStatus.FAILED,
+      errorReason: reason,
+    });
+  }
+
+  async failProcessingDownload(
+    fileId: string,
+    reason: string,
+  ): Promise<boolean> {
+    const result = await this.fileRepository.update(
+      { id: fileId, status: FileStatus.PROCESSING },
+      {
+        status: FileStatus.FAILED,
+        queueJobId: null,
+        errorReason: reason,
+      },
+    );
+
+    return (result.affected ?? 0) > 0;
+  }
+
+  async findExpiredReadyFiles(now = new Date()): Promise<FileEntity[]> {
+    return this.fileRepository
+      .createQueryBuilder('file')
+      .where('file.status = :status', { status: FileStatus.READY })
+      .andWhere('file.expiresAt IS NOT NULL')
+      .andWhere('file.expiresAt <= :now', { now })
+      .getMany();
+  }
+
+  async findStaleProcessingDownloads(
+    updatedBefore: Date,
+    limit: number,
+  ): Promise<FileEntity[]> {
+    return this.fileRepository
+      .createQueryBuilder('file')
+      .where('file.status = :status', { status: FileStatus.PROCESSING })
+      .andWhere('file.updatedAt <= :updatedBefore', { updatedBefore })
+      .orderBy('file.updatedAt', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  async markDeleted(fileId: string): Promise<void> {
+    await this.fileRepository.update(fileId, {
+      status: FileStatus.DELETED,
+    });
+  }
+
+  async getActiveSessionBytes(sessionId: string): Promise<number> {
+    const raw = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('COALESCE(SUM(CAST(file.size AS bigint)), 0)', 'total')
+      .where('file.sessionId = :sessionId', { sessionId })
+      .andWhere('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .andWhere('file.size IS NOT NULL')
+      .getRawOne<{ total: string }>();
+
+    return Number(raw?.total ?? 0);
+  }
+
+  async getActiveStorageBytes(): Promise<number> {
+    const raw = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('COALESCE(SUM(CAST(file.size AS bigint)), 0)', 'total')
+      .where('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .andWhere('file.size IS NOT NULL')
+      .getRawOne<{ total: string }>();
+
+    return Number(raw?.total ?? 0);
+  }
+
+  async getActiveReservationSessionIds(): Promise<string[]> {
+    const rows = await this.fileRepository
+      .createQueryBuilder('file')
+      .select('DISTINCT file.sessionId', 'sessionId')
+      .where('file.status IN (:...statuses)', {
+        statuses: [FileStatus.PROCESSING, FileStatus.READY],
+      })
+      .getRawMany<{ sessionId: string }>();
+
+    return rows.map((row) => row.sessionId);
+  }
+
+  async findQueuedDownloads(limit: number): Promise<FileEntity[]> {
+    return this.fileRepository.find({
+      where: { status: FileStatus.QUEUED },
+      order: { createdAt: 'ASC' },
+      take: limit,
+    });
+  }
+
+  async claimQueuedDownload(fileId: string): Promise<boolean> {
+    const result = await this.fileRepository.update(
+      { id: fileId, status: FileStatus.QUEUED },
+      {
+        status: FileStatus.PROCESSING,
+        queueJobId: null,
+        errorReason: null,
+      },
+    );
+
+    return (result.affected ?? 0) > 0;
+  }
+}

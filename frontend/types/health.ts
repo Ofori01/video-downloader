@@ -12,5 +12,6 @@ export interface HealthResponse {
     postgres: ServiceCheck;
     redis: ServiceCheck;
     queue: ServiceCheck;
+    worker: ServiceCheck;
   };
 }

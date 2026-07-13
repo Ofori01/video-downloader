@@ -1,0 +1,94 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frontend
+      - backend-api
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/}
+    image: video-downloader-frontend:local
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+
+  backend-api:
+    build:
+      context: ./backend
+      target: api-runtime
+    image: video-downloader-backend-api:local
+    restart: unless-stopped
+    command: ["pnpm", "run", "runtime:api"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.production}
+    expose:
+      - "3000"
+    depends_on:
+      - redis
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/system/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  backend-worker:
+    build:
+      context: ./backend
+      target: worker-runtime
+    image: video-downloader-backend-worker:local
+    restart: unless-stopped
+    command: ["pnpm", "run", "runtime:worker"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.production}
+    environment:
+      YTDLP_BINARY_PATH: /usr/local/bin/yt-dlp
+    depends_on:
+      - redis
+      - backend-api
+
+  backend-migrate:
+    image: video-downloader-backend-api:local
+    profiles:
+      - migrate
+    command: ["pnpm", "run", "runtime:migrate"]
+    env_file:
+      - ${APP_ENV_FILE:-.env.production}
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  caddy-data:
+  caddy-config:
+  redis-data:

@@ -1,23 +1,10 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
 import { Providers } from "@/app/providers";
-
-const sans = Instrument_Sans({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const mono = JetBrains_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Video Downloader",
-  description:
-    "Minimalist video download workflow with transparent status and temporary links.",
+  description: "Paste a video link, choose a format, and download.",
 };
 
 export default function RootLayout({
@@ -26,17 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={cn(
-        "h-full",
-        "antialiased",
-        sans.variable,
-        mono.variable,
-        "font-sans"
-      )}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className="h-full antialiased">
+      <body className="flex min-h-full flex-col">
         <Providers>{children}</Providers>
       </body>
     </html>
