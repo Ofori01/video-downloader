@@ -11,13 +11,7 @@ cp .env.example .env.local
 2. Run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3001](http://localhost:3001) with your browser to see
@@ -63,7 +57,8 @@ This frontend is a UI adapter over the Nest backend. It does not own the downloa
 ## Scripts
 
 ```bash
-npm run dev
-npm run lint
-npm run build
+pnpm install --frozen-lockfile
+pnpm run dev
+pnpm run lint
+pnpm run build
 ```
