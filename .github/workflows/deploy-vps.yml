@@ -172,13 +172,21 @@ jobs:
           fi
 
           docker compose --env-file .env.vps --env-file .env.images pull
-          docker compose --env-file .env.vps --env-file .env.images --profile migrate run --rm backend-migrate
+          docker compose --env-file .env.vps --env-file .env.images --profile migrate run --rm -T backend-migrate </dev/null
           docker compose --env-file .env.vps --env-file .env.images up -d --remove-orphans
           docker compose --env-file .env.vps --env-file .env.images ps
 
           host_port="$(grep -E '^BACKEND_HOST_PORT=' .env.vps | tail -1 | cut -d= -f2- || true)"
           host_port="${host_port:-3100}"
-          curl -fsS "http://127.0.0.1:${host_port}/system/health"
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${host_port}/system/health"; then
+              docker image prune -f --filter "until=168h"
+              exit 0
+            fi
+            sleep 2
+          done
 
-          docker image prune -f --filter "until=168h"
+          docker compose --env-file .env.vps --env-file .env.images ps >&2
+          docker compose --env-file .env.vps --env-file .env.images logs --tail=160 backend-api backend-worker redis >&2
+          exit 1
           REMOTE
