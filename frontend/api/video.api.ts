@@ -1,6 +1,7 @@
-import { httpClient, apiBaseUrl } from "@/api/http-client";
+import { httpClient } from "@/api/http-client";
 import type {
   AvailableProfile,
+  VideoDownloadUrlResponse,
   VideoFile,
   VideoJobCreateRequest,
   VideoJobCreateResponse,
@@ -40,7 +41,10 @@ export const videoApi = {
     return response.data;
   },
 
-  getDownloadUrl(fileId: string): string {
-    return `${apiBaseUrl}/download/${fileId}`;
+  async getSignedDownloadUrl(fileId: string): Promise<string> {
+    const response = await httpClient.get<VideoDownloadUrlResponse>(
+      `/video/files/${fileId}/download-url`,
+    );
+    return response.data.url;
   },
 };

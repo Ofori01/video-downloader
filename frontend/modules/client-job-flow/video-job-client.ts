@@ -21,9 +21,7 @@ export const videoJobClient = {
     return videoApi.getProfiles(url, options);
   },
 
-  createJob(
-    payload: VideoJobCreateRequest,
-  ): Promise<VideoJobCreateResponse> {
+  createJob(payload: VideoJobCreateRequest): Promise<VideoJobCreateResponse> {
     const normalizedUrl = normalizeSourceUrl(payload.url);
     const normalizedPayload: VideoJobCreateRequest = {
       url: normalizedUrl,
@@ -62,7 +60,7 @@ export const videoJobClient = {
     return videoApi.getFileStatus(fileId, options);
   },
 
-  getDownloadUrl(fileId: string): string {
-    return videoApi.getDownloadUrl(fileId);
+  getSignedDownloadUrl(fileId: string): Promise<string> {
+    return videoApi.getSignedDownloadUrl(fileId);
   },
 };

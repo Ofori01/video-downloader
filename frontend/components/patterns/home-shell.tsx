@@ -5,6 +5,7 @@ import { ServiceStatusPill } from "@/components/system/service-status-pill";
 import { UrlDownloadForm } from "@/components/system/url-download-form";
 import { DownloadsPanel } from "@/components/system/downloads-panel";
 import { useHealthStatus } from "@/hooks/use-health-status";
+import { notify } from "@/lib/notify";
 import { useClientJobFlow } from "@/modules/client-job-flow";
 
 export function HomeShell() {
@@ -14,12 +15,24 @@ export function HomeShell() {
     ? getErrorMessage(jobFlow.statusError)
     : null;
 
-  function handleDownload(jobId: string): void {
-    window.open(
-      jobFlow.getDownloadUrl(jobId),
-      "_blank",
-      "noopener,noreferrer",
-    );
+  async function handleDownload(jobId: string): Promise<void> {
+    const downloadWindow = window.open("about:blank", "_blank");
+    if (downloadWindow) {
+      downloadWindow.opener = null;
+    }
+
+    try {
+      const signedUrl = await jobFlow.getSignedDownloadUrl(jobId);
+      if (downloadWindow) {
+        downloadWindow.location.href = signedUrl;
+        return;
+      }
+
+      window.location.href = signedUrl;
+    } catch (error) {
+      downloadWindow?.close();
+      notify.error(getErrorMessage(error));
+    }
   }
 
   return (

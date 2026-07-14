@@ -6,13 +6,12 @@ import {
   Param,
   Post,
   Req,
-  Res,
   Query,
   ServiceUnavailableException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { CreateVideoJobDto } from './dto/create-video-job.dto';
 import { AvailableProfileDto } from './dto/available-profiles.dto';
 import { DownloadFileAccessService } from './download-file-access.service';
@@ -98,21 +97,17 @@ export class VideoController {
     return this.downloadFileAccess.getFileStatus(id, sessionId);
   }
 
-  @Get('download/:id')
-  async download(
+  @Get('video/files/:id/download-url')
+  async getSignedDownloadUrl(
     @Param('id') id: string,
     @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
+  ): Promise<{ url: string }> {
     const sessionId = req.sessionContext?.id;
     if (!sessionId) {
       throw new InternalServerErrorException('Session context missing');
     }
 
-    const signedUrl = await this.downloadFileAccess.getDownloadUrl(
-      id,
-      sessionId,
-    );
-    res.redirect(signedUrl);
+    const url = await this.downloadFileAccess.getDownloadUrl(id, sessionId);
+    return { url };
   }
 }

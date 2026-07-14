@@ -139,4 +139,35 @@ describe('VideoController', () => {
     expect(profileCatalogue.getAvailableProfiles).not.toHaveBeenCalled();
     expect(profileSnapshotStore.saveProfiles).not.toHaveBeenCalled();
   });
+
+  it('returns a signed download url for the owning session', async () => {
+    const controller = createController();
+    const req = {
+      sessionContext: { id: 'session-1' },
+    } as unknown as Request;
+    downloadFileAccess.getDownloadUrl.mockResolvedValue(
+      'https://r2.example.com/signed',
+    );
+
+    await expect(
+      controller.getSignedDownloadUrl('file-1', req),
+    ).resolves.toEqual({
+      url: 'https://r2.example.com/signed',
+    });
+
+    expect(downloadFileAccess.getDownloadUrl).toHaveBeenCalledWith(
+      'file-1',
+      'session-1',
+    );
+  });
+
+  it('requires session context before returning a signed download url', async () => {
+    const controller = createController();
+
+    await expect(
+      controller.getSignedDownloadUrl('file-1', {} as Request),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+    expect(downloadFileAccess.getDownloadUrl).not.toHaveBeenCalled();
+  });
 });
