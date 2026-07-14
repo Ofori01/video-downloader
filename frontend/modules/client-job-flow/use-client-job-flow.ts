@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { normalizeError } from "@/api/error";
 import { notify } from "@/lib/notify";
@@ -44,7 +49,7 @@ interface ClientJobFlow {
   jobItems: JobViewModel[];
   isFetchingStatuses: boolean;
   statusError: unknown;
-  getDownloadUrl: (fileId: string) => string;
+  getSignedDownloadUrl: (fileId: string) => Promise<string>;
 }
 
 function useProfileOptionsQuery(url: string | null) {
@@ -143,7 +148,7 @@ export function useClientJobFlow(): ClientJobFlow {
   );
   const hasSelectedProfile = Boolean(
     selectedProfileId &&
-      profileOptions.some((profile) => profile.id === selectedProfileId),
+    profileOptions.some((profile) => profile.id === selectedProfileId),
   );
 
   function updateUrl(nextUrl: string): void {
@@ -192,6 +197,6 @@ export function useClientJobFlow(): ClientJobFlow {
     jobItems: jobStatuses.viewModels,
     isFetchingStatuses: jobStatuses.isFetching,
     statusError: jobStatuses.firstError,
-    getDownloadUrl: videoJobClient.getDownloadUrl,
+    getSignedDownloadUrl: videoJobClient.getSignedDownloadUrl,
   };
 }

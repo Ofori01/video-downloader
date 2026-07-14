@@ -13,8 +13,13 @@ import { DownloadReservationMaintenanceService } from './download-reservation-ma
 import { DownloadReservationService } from './download-reservation.service';
 import { DownloadWorkerLifecycleService } from './download-worker-lifecycle.service';
 import { QueuedDownloadPromotionService } from './queued-download-promotion.service';
+import { SourceConcurrencyService } from './source-concurrency.service';
+import { SourceCooldownService } from './source-cooldown.service';
+import { SourceSiteDetectorService } from './source-site-detector.service';
 import { VideoProcessor } from './video.processor';
+import { YtDlpErrorClassifierService } from './ytdlp-error-classifier.service';
 import { YtDlpMetadataClient } from './ytdlp-metadata-client.service';
+import { YtDlpSourceOptionsService } from './ytdlp-source-options.service';
 import { YtDlpStreamClient } from './ytdlp-stream-client.service';
 import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
 
@@ -35,8 +40,13 @@ import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
     DownloadReservationService,
     DownloadWorkerLifecycleService,
     QueuedDownloadPromotionService,
+    SourceConcurrencyService,
+    SourceCooldownService,
+    SourceSiteDetectorService,
     VideoProcessor,
+    YtDlpErrorClassifierService,
     YtDlpMetadataClient,
+    YtDlpSourceOptionsService,
     YtDlpStreamClient,
     YtDlpStreamCommandBuilder,
   ],

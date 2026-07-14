@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppConfigService } from '../../config/app-config.service';
 import { ResolvedDownloadFormat } from './download-format-resolver.service';
+import { YtDlpSourceOptionsService } from './ytdlp-source-options.service';
 
 export interface YtDlpStreamCommand {
   binary: string;
@@ -15,7 +16,10 @@ export type YtDlpOutputTarget =
 
 @Injectable()
 export class YtDlpStreamCommandBuilder {
-  constructor(private readonly config: AppConfigService) {}
+  constructor(
+    private readonly config: AppConfigService,
+    private readonly sourceOptions: YtDlpSourceOptionsService,
+  ) {}
 
   buildStreamCommand(
     url: string,
@@ -34,6 +38,7 @@ export class YtDlpStreamCommandBuilder {
       '--extractor-retries',
       '1',
       '--force-ipv4',
+      ...this.sourceOptions.getDownloadArgs(url),
     ];
 
     if (this.config.ffmpegBinaryPath) {

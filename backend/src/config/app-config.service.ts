@@ -77,6 +77,26 @@ export class AppConfigService {
     return this.getNumber('PROCESSING_STALE_AFTER_SECONDS');
   }
 
+  get sourceProfileCacheTtlSeconds(): number {
+    return this.getNumber('SOURCE_PROFILE_CACHE_TTL_SECONDS');
+  }
+
+  get instagramCooldownSeconds(): number {
+    return this.getNumber('INSTAGRAM_COOLDOWN_SECONDS');
+  }
+
+  get instagramSourceLockTtlSeconds(): number {
+    return this.getNumber('INSTAGRAM_SOURCE_LOCK_TTL_SECONDS');
+  }
+
+  get instagramYtDlpSleepRequestsSeconds(): number {
+    return this.getNumber('INSTAGRAM_YTDLP_SLEEP_REQUESTS_SECONDS');
+  }
+
+  get instagramYtDlpRetrySleep(): string {
+    return this.getOrThrow('INSTAGRAM_YTDLP_RETRY_SLEEP');
+  }
+
   get enableNewRequests(): boolean {
     return this.getBoolean('ENABLE_NEW_REQUESTS');
   }

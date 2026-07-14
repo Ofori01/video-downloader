@@ -51,6 +51,10 @@ export interface VideoFile {
   errorReason: string | null;
 }
 
+export interface VideoDownloadUrlResponse {
+  url: string;
+}
+
 export interface JobViewModel {
   id: string;
   title: string;

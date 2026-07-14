@@ -45,27 +45,6 @@ export class ProfileCatalogueService {
     return this.buildProfiles(playableMetadata);
   }
 
-  async getProfile(
-    url: string,
-    profileId: string,
-  ): Promise<AvailableProfile | null> {
-    const metadata = await this.metadataClient.getMetadata(url);
-    if (!metadata) {
-      return null;
-    }
-
-    const playableMetadata = this.selectPlayableMetadata(metadata);
-    if (!playableMetadata) {
-      return null;
-    }
-
-    return (
-      this.buildProfiles(playableMetadata).find(
-        (profile) => profile.id === profileId || profile.format === profileId,
-      ) ?? null
-    );
-  }
-
   async getFormatSize(url: string, formatId: string): Promise<number> {
     const metadata = await this.metadataClient.getMetadata(url);
     if (!metadata) {

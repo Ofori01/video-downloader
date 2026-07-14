@@ -52,6 +52,15 @@ export const envValidationSchema = Joi.object({
     .integer()
     .min(600)
     .default(21600),
+  SOURCE_PROFILE_CACHE_TTL_SECONDS: Joi.number().integer().min(60).default(600),
+
+  INSTAGRAM_COOLDOWN_SECONDS: Joi.number().integer().min(60).default(1800),
+  INSTAGRAM_SOURCE_LOCK_TTL_SECONDS: Joi.number()
+    .integer()
+    .min(30)
+    .default(1800),
+  INSTAGRAM_YTDLP_SLEEP_REQUESTS_SECONDS: Joi.number().min(0).default(1.5),
+  INSTAGRAM_YTDLP_RETRY_SLEEP: Joi.string().default('extractor:exp=30:300'),
 
   ENABLE_NEW_REQUESTS: Joi.boolean().default(true),
 
