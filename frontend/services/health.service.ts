@@ -1,8 +1,8 @@
 import { healthApi } from "@/api/health.api";
-import type { HealthResponse } from "@/types";
+import type { SystemStatusResponse } from "@/types";
 
 export const healthService = {
-  getHealth(options?: { signal?: AbortSignal }): Promise<HealthResponse> {
-    return healthApi.getHealth(options);
+  getStatus(options?: { signal?: AbortSignal }): Promise<SystemStatusResponse> {
+    return healthApi.getStatus(options);
   },
 };

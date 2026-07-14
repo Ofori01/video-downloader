@@ -8,7 +8,12 @@ export function useHealthStatus() {
   return useQuery({
     queryKey: ["health-status"],
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      healthService.getHealth({ signal }),
-    refetchInterval: 20_000,
+      healthService.getStatus({ signal }),
+    retry: false,
+    staleTime: Infinity,
+    refetchInterval: false,
+    refetchOnMount: true,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
 }

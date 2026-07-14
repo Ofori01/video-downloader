@@ -1,9 +1,9 @@
 import { CheckCircle2, Clock3, WifiOff } from "lucide-react";
 
-import type { HealthResponse } from "@/types";
+import type { SystemStatusResponse } from "@/types";
 
 interface ServiceStatusPillProps {
-  health?: HealthResponse;
+  health?: SystemStatusResponse;
   hasError: boolean;
 }
 
@@ -25,7 +25,10 @@ export function ServiceStatusPill({
   );
 }
 
-function getServiceState(health: HealthResponse | undefined, hasError: boolean) {
+function getServiceState(
+  health: SystemStatusResponse | undefined,
+  hasError: boolean,
+) {
   if (hasError) {
     return {
       label: "Service is unavailable",
@@ -42,17 +45,9 @@ function getServiceState(health: HealthResponse | undefined, hasError: boolean) 
     };
   }
 
-  if (health.status === "ok") {
-    return {
-      label: "Ready to download",
-      icon: CheckCircle2,
-      iconClassName: "size-3.5 text-[#12643d]",
-    };
-  }
-
   return {
-    label: "Downloads may take longer",
-    icon: Clock3,
-    iconClassName: "size-3.5 text-[#7a4d00]",
+    label: "Ready to download",
+    icon: CheckCircle2,
+    iconClassName: "size-3.5 text-[#12643d]",
   };
 }
