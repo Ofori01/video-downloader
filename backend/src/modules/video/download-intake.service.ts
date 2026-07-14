@@ -20,7 +20,9 @@ import {
   DownloadOutput,
 } from './download-output';
 import { DownloadSizeEstimator } from './download-size-estimator.service';
-import { ProfileCatalogueService } from './profile-catalogue.service';
+import { ProfileSnapshotStoreService } from './profile-snapshot-store.service';
+import { SourceCooldownService } from './source-cooldown.service';
+import { GENERIC_SOURCE_BUSY_MESSAGE } from './source-failure';
 import type { AvailableProfile } from './ytdlp.types';
 
 export interface SubmitDownloadCommand {
@@ -43,11 +45,12 @@ export class DownloadIntakeService {
   constructor(
     private readonly config: AppConfigService,
     private readonly fileStore: DownloadFileStore,
-    private readonly profileCatalogue: ProfileCatalogueService,
+    private readonly profileSnapshotStore: ProfileSnapshotStoreService,
     private readonly queueProducer: QueueProducerService,
     private readonly reservationService: DownloadReservationService,
     private readonly sessionService: SessionService,
     private readonly sizeEstimator: DownloadSizeEstimator,
+    private readonly sourceCooldown: SourceCooldownService,
   ) {}
 
   async submit(command: SubmitDownloadCommand): Promise<SubmitDownloadResult> {
@@ -55,6 +58,11 @@ export class DownloadIntakeService {
       throw new ServiceUnavailableException(
         'New requests are currently disabled',
       );
+    }
+
+    const cooldown = await this.sourceCooldown.getStatus(command.url);
+    if (cooldown.active) {
+      throw new ServiceUnavailableException(GENERIC_SOURCE_BUSY_MESSAGE);
     }
 
     const sessionJobs = await this.sessionService.incrementSessionJobs(
@@ -145,12 +153,15 @@ export class DownloadIntakeService {
       return { estimatedSize, output: DEFAULT_VIDEO_OUTPUT };
     }
 
-    const profile = await this.profileCatalogue.getProfile(
+    const profile = await this.profileSnapshotStore.getProfile(
+      command.sessionId,
       command.url,
       command.profileId,
     );
     if (!profile) {
-      throw new BadRequestException('Selected profile is not available');
+      throw new BadRequestException(
+        'Selected profile expired. Refresh formats and try again.',
+      );
     }
 
     const estimatedSize = this.resolveSelectedProfileEstimate(profile);

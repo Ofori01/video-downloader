@@ -21,7 +21,7 @@ describe('DownloadIntakeService', () => {
     markFailed: jest.fn(),
   };
 
-  const profileCatalogue = {
+  const profileSnapshotStore = {
     getProfile: jest.fn(),
   };
 
@@ -43,23 +43,32 @@ describe('DownloadIntakeService', () => {
     estimate: jest.fn(),
   };
 
+  const sourceCooldown = {
+    getStatus: jest.fn(),
+  };
+
   const createService = () =>
     new DownloadIntakeService(
       config as never,
       fileStore as never,
-      profileCatalogue as never,
+      profileSnapshotStore as never,
       queueProducer as never,
       reservationService as never,
       sessionService as never,
       sizeEstimator as never,
+      sourceCooldown as never,
     );
 
   beforeEach(() => {
     jest.clearAllMocks();
     config.enableNewRequests = true;
+    sourceCooldown.getStatus.mockResolvedValue({
+      source: 'generic',
+      active: false,
+    });
     sessionService.incrementSessionJobs.mockResolvedValue(1);
     sizeEstimator.estimate.mockResolvedValue(1000);
-    profileCatalogue.getProfile.mockResolvedValue({
+    profileSnapshotStore.getProfile.mockResolvedValue({
       id: '18',
       format: '18',
       ext: 'mp4',
@@ -83,6 +92,23 @@ describe('DownloadIntakeService', () => {
         sessionId: 'session-1',
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('throws when the source is cooling down', async () => {
+    const service = createService();
+    sourceCooldown.getStatus.mockResolvedValue({
+      source: 'instagram',
+      active: true,
+    });
+
+    await expect(
+      service.submit({
+        url: 'https://instagram.com/reel/abc',
+        sessionId: 'session-1',
+      }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+    expect(sessionService.incrementSessionJobs).not.toHaveBeenCalled();
   });
 
   it('throws when the session job rate limit is exceeded', async () => {
@@ -186,7 +212,7 @@ describe('DownloadIntakeService', () => {
 
   it('uses the max file size reservation when a selected profile has no estimate', async () => {
     const service = createService();
-    profileCatalogue.getProfile.mockResolvedValue({
+    profileSnapshotStore.getProfile.mockResolvedValue({
       id: 'merged',
       format: 'video+audio',
       ext: 'mp4',
@@ -232,7 +258,7 @@ describe('DownloadIntakeService', () => {
 
   it('rejects an unavailable selected profile', async () => {
     const service = createService();
-    profileCatalogue.getProfile.mockResolvedValue(null);
+    profileSnapshotStore.getProfile.mockResolvedValue(null);
 
     await expect(
       service.submit({
@@ -242,6 +268,11 @@ describe('DownloadIntakeService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
+    expect(profileSnapshotStore.getProfile).toHaveBeenCalledWith(
+      'session-1',
+      'https://example.com/video',
+      'missing',
+    );
     expect(reservationService.evaluateAdmission).not.toHaveBeenCalled();
   });
 

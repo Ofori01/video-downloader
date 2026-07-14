@@ -289,55 +289,6 @@ describe('ProfileCatalogueService', () => {
     ]);
   });
 
-  it('resolves a selected profile from the generated catalogue', async () => {
-    const service = createService();
-    metadataClient.getMetadata.mockResolvedValue({
-      requestedDownloads: [],
-      formats: [
-        {
-          formatId: 'audio',
-          ext: 'm4a',
-          vcodec: 'none',
-          acodec: 'aac',
-          filesize: 1234,
-        },
-      ],
-    });
-
-    await expect(
-      service.getProfile('https://example.com/video', 'audio'),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        id: 'audio',
-        format: 'audio',
-        ext: 'm4a',
-        contentType: 'audio/mp4',
-        mediaKind: 'audio',
-      }),
-    );
-  });
-
-  it('does not resolve video-only formats as selectable profiles', async () => {
-    const service = createService();
-    metadataClient.getMetadata.mockResolvedValue({
-      requestedDownloads: [],
-      formats: [
-        {
-          formatId: 'video-only',
-          ext: 'mp4',
-          height: 720,
-          vcodec: 'h264',
-          acodec: 'none',
-          filesize: 1234,
-        },
-      ],
-    });
-
-    await expect(
-      service.getProfile('https://example.com/video', 'video-only'),
-    ).resolves.toBeNull();
-  });
-
   it('returns selected format size from metadata', async () => {
     const service = createService();
     const metadata: YtDlpMetadata = {

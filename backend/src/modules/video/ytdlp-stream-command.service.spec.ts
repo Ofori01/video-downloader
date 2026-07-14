@@ -1,11 +1,23 @@
 import { YtDlpStreamCommandBuilder } from './ytdlp-stream-command.service';
 
 describe('YtDlpStreamCommandBuilder', () => {
+  const sourceOptions = {
+    getDownloadArgs: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    sourceOptions.getDownloadArgs.mockReturnValue([]);
+  });
+
   it('builds the yt-dlp stream command with configured binaries', () => {
-    const builder = new YtDlpStreamCommandBuilder({
-      ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
-      ffmpegBinaryPath: '/usr/bin/ffmpeg',
-    } as never);
+    const builder = new YtDlpStreamCommandBuilder(
+      {
+        ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
+        ffmpegBinaryPath: '/usr/bin/ffmpeg',
+      } as never,
+      sourceOptions as never,
+    );
 
     const command = builder.buildStreamCommand('https://example.com/video', {
       format: '18',
@@ -40,10 +52,13 @@ describe('YtDlpStreamCommandBuilder', () => {
   });
 
   it('falls back to the yt-dlp binary name when no binary path is configured', () => {
-    const builder = new YtDlpStreamCommandBuilder({
-      ytDlpBinaryPath: '',
-      ffmpegBinaryPath: '',
-    } as never);
+    const builder = new YtDlpStreamCommandBuilder(
+      {
+        ytDlpBinaryPath: '',
+        ffmpegBinaryPath: '',
+      } as never,
+      sourceOptions as never,
+    );
 
     expect(
       builder.buildStreamCommand('https://example.com/video', {
@@ -55,10 +70,13 @@ describe('YtDlpStreamCommandBuilder', () => {
   });
 
   it('writes to a file output template when requested', () => {
-    const builder = new YtDlpStreamCommandBuilder({
-      ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
-      ffmpegBinaryPath: '/usr/local/bin/ffmpeg',
-    } as never);
+    const builder = new YtDlpStreamCommandBuilder(
+      {
+        ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
+        ffmpegBinaryPath: '/usr/local/bin/ffmpeg',
+      } as never,
+      sourceOptions as never,
+    );
 
     const command = builder.buildStreamCommand(
       'https://example.com/video',
@@ -75,6 +93,37 @@ describe('YtDlpStreamCommandBuilder', () => {
 
     expect(command.args).toEqual(
       expect.arrayContaining(['-o', '/tmp/download.%(ext)s']),
+    );
+  });
+
+  it('includes source-specific yt-dlp args', () => {
+    const builder = new YtDlpStreamCommandBuilder(
+      {
+        ytDlpBinaryPath: '/usr/local/bin/yt-dlp',
+        ffmpegBinaryPath: '',
+      } as never,
+      sourceOptions as never,
+    );
+    sourceOptions.getDownloadArgs.mockReturnValue([
+      '--sleep-requests',
+      '1.5',
+      '--retry-sleep',
+      'extractor:exp=30:300',
+    ]);
+
+    const command = builder.buildStreamCommand('https://instagram.com/reel/a', {
+      format: '18',
+      profile: 'custom',
+      requiresFileOutput: false,
+    });
+
+    expect(command.args).toEqual(
+      expect.arrayContaining([
+        '--sleep-requests',
+        '1.5',
+        '--retry-sleep',
+        'extractor:exp=30:300',
+      ]),
     );
   });
 });

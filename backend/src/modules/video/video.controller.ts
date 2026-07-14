@@ -8,6 +8,7 @@ import {
   Req,
   Res,
   Query,
+  ServiceUnavailableException,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -17,6 +18,10 @@ import { AvailableProfileDto } from './dto/available-profiles.dto';
 import { DownloadFileAccessService } from './download-file-access.service';
 import { DownloadIntakeService } from './download-intake.service';
 import { ProfileCatalogueService } from './profile-catalogue.service';
+import { ProfileSnapshotStoreService } from './profile-snapshot-store.service';
+import { SourceCooldownService } from './source-cooldown.service';
+import { GENERIC_SOURCE_BUSY_MESSAGE } from './source-failure';
+import { SourceProfileCacheService } from './source-profile-cache.service';
 
 @Controller()
 export class VideoController {
@@ -24,6 +29,9 @@ export class VideoController {
     private readonly downloadFileAccess: DownloadFileAccessService,
     private readonly downloadIntake: DownloadIntakeService,
     private readonly profileCatalogue: ProfileCatalogueService,
+    private readonly profileSnapshotStore: ProfileSnapshotStoreService,
+    private readonly sourceCooldown: SourceCooldownService,
+    private readonly sourceProfileCache: SourceProfileCacheService,
   ) {}
 
   @Post('video/jobs')
@@ -43,13 +51,40 @@ export class VideoController {
 
   @Get('video/profiles')
   async getProfiles(
+    @Req() req: Request,
     @Query('url') url?: string,
   ): Promise<AvailableProfileDto[]> {
     if (!url) {
       return [];
     }
 
+    const sessionId = req.sessionContext?.id;
+    if (!sessionId) {
+      throw new InternalServerErrorException('Session context missing');
+    }
+
+    const cooldown = await this.sourceCooldown.getStatus(url);
+    if (cooldown.active) {
+      throw new ServiceUnavailableException(GENERIC_SOURCE_BUSY_MESSAGE);
+    }
+
+    const cachedProfiles = await this.sourceProfileCache.getProfiles(url);
+    if (cachedProfiles) {
+      await this.profileSnapshotStore.saveProfiles(
+        sessionId,
+        url,
+        cachedProfiles,
+      );
+      return cachedProfiles;
+    }
+
     const profiles = await this.profileCatalogue.getAvailableProfiles(url);
+    if (profiles.length > 0) {
+      await this.sourceProfileCache.saveProfiles(url, profiles);
+    }
+
+    await this.profileSnapshotStore.saveProfiles(sessionId, url, profiles);
+
     return profiles;
   }
 

@@ -1,5 +1,10 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { Queue, QueueEvents } from 'bullmq';
 import { AppConfigService } from '../../config/app-config.service';
 import { METADATA_JOB_NAME } from '../queue/queue.constants';
@@ -8,6 +13,10 @@ import {
   ExtractMetadataJobResult,
   VideoQueueJobData,
 } from '../queue/queue.types';
+import {
+  GENERIC_SOURCE_BUSY_MESSAGE,
+  isSourceAccessRejectedError,
+} from './source-failure';
 import type { VideoMetadataClient } from './video-metadata-client';
 import type { YtDlpMetadata } from './ytdlp.types';
 
@@ -52,6 +61,10 @@ export class QueuedMetadataClient
       )) as ExtractMetadataJobResult;
       return result.metadata;
     } catch (error) {
+      if (isSourceAccessRejectedError(error)) {
+        throw new ServiceUnavailableException(GENERIC_SOURCE_BUSY_MESSAGE);
+      }
+
       this.logger.warn(
         `Metadata job failed for jobId=${String(job.id)}: ${this.formatError(
           error,
