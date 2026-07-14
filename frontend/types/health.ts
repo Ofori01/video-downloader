@@ -15,3 +15,9 @@ export interface HealthResponse {
     worker: ServiceCheck;
   };
 }
+
+export interface SystemStatusResponse {
+  status: "ok";
+  timestamp: string;
+  uptimeSeconds: number;
+}

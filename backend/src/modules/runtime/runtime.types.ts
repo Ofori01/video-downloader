@@ -16,6 +16,12 @@ export interface RuntimeHealthStatus {
   };
 }
 
+export interface RuntimeApiStatus {
+  status: 'ok';
+  timestamp: string;
+  uptimeSeconds: number;
+}
+
 export interface BinaryReadinessResult {
   ytDlp: RuntimeCheck;
   ffmpeg?: RuntimeCheck;

@@ -33,6 +33,9 @@ import { VideoApiModule } from './modules/video/video-api.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(RequestIdMiddleware).forRoutes('*');
-    consumer.apply(SessionMiddleware).exclude('system/health').forRoutes('*');
+    consumer
+      .apply(SessionMiddleware)
+      .exclude('system/health', 'system/status')
+      .forRoutes('*');
   }
 }
